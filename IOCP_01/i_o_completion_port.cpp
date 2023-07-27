@@ -304,8 +304,11 @@ bool IOCompletionPort::CheckGQCSResult(ClientInfo* p_client_info, bool gqcs_ret,
 
 void IOCompletionPort::DispatchOverlapped(ClientInfo* p_client_info, DWORD io_size, LPOVERLAPPED p_overlapped)
 {
+	// 확장 Overlapped 구조체로 캐스팅
+	OverlappedEx* p_overlapped_ex = (OverlappedEx*) p_overlapped;
+
 	// Recv 완료 통지
-	if (&p_client_info->recv_overlapped_ex_.wsa_overlapped_ == p_overlapped) {
+	if (p_overlapped_ex->op_type_ == IOOperation::kRECV) {
 
 		// Recv 완료 후 다시 Recv 요청을 건다.
 		std::cout << "[WorkerThread] Recv Completion\n";
@@ -320,7 +323,7 @@ void IOCompletionPort::DispatchOverlapped(ClientInfo* p_client_info, DWORD io_si
 	}
 
 	// Send 완료 통지
-	if (&p_client_info->send_overlapped_ex_.wsa_overlapped_ == p_overlapped) {
+	if (p_overlapped_ex->op_type_ == IOOperation::kSEND) {
 
 		// Send 완료
 		std::cout << "[WorkerThread] Send Completion\n";
