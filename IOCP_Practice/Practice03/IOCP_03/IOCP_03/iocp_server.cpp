@@ -2,6 +2,9 @@
 
 #include <iostream>
 
+/// <summary>
+/// WSAStartup 및 리슨소켓 초기화
+/// </summary>
 bool IOCPServer::InitSocket()
 {
 	// Winsock 초기화
@@ -27,6 +30,10 @@ bool IOCPServer::InitSocket()
 	return true;
 }
 
+/// <summary> <para>
+/// 서버 주소 정보를 리슨 소켓에 Bind하고 Listen 처리 </para> <para>
+/// 백로그 큐 사이즈를 지정하지 않으면 5로 설정된다. </para>
+/// </summary>
 bool IOCPServer::BindAndListen(const uint16_t port, int32_t backlog_queue_size)
 {
 	// 소켓 주소 구조체 설정
@@ -61,12 +68,15 @@ bool IOCPServer::BindAndListen(const uint16_t port, int32_t backlog_queue_size)
 	return true;
 }
 
+/// <summary>
+/// ClientInfo 풀 생성, IOCP 생성, 워커쓰레드 생성, Accepter 쓰레드 생성
+/// </summary>
 bool IOCPServer::StartServer(const uint32_t max_client_count)
 {
 	is_server_running_ = true;
 
 	// ClientInfo 풀 생성
-	CreateClient(max_client_count);
+	CreateClientPool(max_client_count);
 
 	// IOCP 생성
 	iocp_ = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
@@ -76,11 +86,25 @@ bool IOCPServer::StartServer(const uint32_t max_client_count)
 		return false;
 	}
 
+	// 워커 쓰레드 및 Accepter 쓰레드 생성
+	auto create_ret = CreateThread();
+	if (!create_ret) {
+		return false;
+	}
+
+	return true;
+}
+
+/// <summary>
+/// 서버 실행에 필요한 워커쓰레드와 Accepter 쓰레드를 생성합니다.
+/// </summary>
+bool IOCPServer::CreateThread()
+{
 	// Worker 스레드 생성
 	auto create_worker_ret = CreateWorkerThread();
 	if (!create_worker_ret)
 	{
-		std::cout << "[CreateWorkerThread] Failed with Error Code : " << GetLastError() << '\n';
+		std::cout << "[CreateWorkerThread] Failed\n";
 		return false;
 	}
 
@@ -88,14 +112,47 @@ bool IOCPServer::StartServer(const uint32_t max_client_count)
 	auto create_accepter_ret = CreateAccepterThread();
 	if (!create_accepter_ret)
 	{
-		std::cout << "[CreateAccepterThread] Failed with Error Code : " << GetLastError() << '\n';
+		std::cout << "[CreateAccepterThread] Failed\n";
 		return false;
 	}
 
 	return true;
 }
 
+/// <summary>
+/// 모든 쓰레드를 종료시키고 서버를 종료합니다.
+/// </summary>
+void IOCPServer::Terminate()
+{
+	// 쓰레드 종료를 유도하는 메시지를 Post
+	PostTerminateMsg();
+
+	// 모든 쓰레드의 종료 확인
+	DestroyThread();
+
+	// IOCP 핸들 close 및 서버 종료
+	is_server_running_ = false;
+	CloseHandle(iocp_);
+}
+
+/// <summary>
+/// 생성된 WorkerThread와 AccepterThread를 모두 파괴한다.
+/// </summary>
 void IOCPServer::DestroyThread()
+{
+	if (DestroyWorkerThread()) {
+		std::cout << "[DestroyThread] Worker Thread Destroyed\n";
+	}
+
+	if (DestroyAccepterThread()) {
+		std::cout << "[DestroyThread] Accepter Thread Destroyed\n";
+	}
+}
+
+/// <summary>
+/// 워커 쓰레드를 모두 종료시킵니다.
+/// </summary>
+bool IOCPServer::DestroyWorkerThread()
 {
 	// 워커 쓰레드 종료
 	is_worker_running_ = false;
@@ -107,8 +164,14 @@ void IOCPServer::DestroyThread()
 		}
 	}
 
-	std::cout << "[DestroyThread] Worker Thread Destroyed\n";
+	return true;
+}
 
+/// <summary>
+/// Accepter 쓰레드를 종료시킵니다.
+/// </summary>
+bool IOCPServer::DestroyAccepterThread()
+{
 	// Accepter 쓰레드 종료
 	is_accepter_running_ = false;
 	closesocket(listen_socket_);
@@ -117,13 +180,13 @@ void IOCPServer::DestroyThread()
 		accepter_thread_.join();
 	}
 
-	std::cout << "[DestroyThread] Accepter Thread Destroyed\n";
-
-	is_server_running_ = false;
-	CloseHandle(iocp_);
+	return true;
 }
 
-void IOCPServer::CreateClient(const uint32_t max_client_count)
+/// <summary>
+/// ClientInfo 풀에 ClientInfo들을 생성한다.
+/// </summary>
+void IOCPServer::CreateClientPool(const uint32_t max_client_count)
 {
 	// reallocation 방지를 위한 reserve
 	client_info_list_.reserve(max_client_count);
@@ -137,6 +200,9 @@ void IOCPServer::CreateClient(const uint32_t max_client_count)
 	std::cout << "[CreateClient] OK\n";
 }
 
+/// <summary>
+/// WorkerThread 리스트에 WorkerThread들을 생성한다.
+/// </summary>
 bool IOCPServer::CreateWorkerThread()
 {
 	auto max_worker_thread = GetMaxWorkerThread();
@@ -145,7 +211,7 @@ bool IOCPServer::CreateWorkerThread()
 	worker_thread_list_.reserve(max_worker_thread);
 
 	// WorkerThread들 생성
-	for (uint32_t i = 0; i < max_worker_thread; i++)
+	for (int32_t i = 0; i < max_worker_thread; i++)
 	{
 		worker_thread_list_.emplace_back([this]() { WorkerThread(); });
 	}
@@ -154,11 +220,9 @@ bool IOCPServer::CreateWorkerThread()
 	return true;
 }
 
-int32_t IOCPServer::GetMaxWorkerThread()
-{
-	return std::thread::hardware_concurrency() * 2 + 1;
-}
-
+/// <summary>
+/// AccepterThread를 생성한다.
+/// </summary>
 bool IOCPServer::CreateAccepterThread()
 {
 	accepter_thread_ = std::thread([this]() { AccepterThread(); });
@@ -167,6 +231,9 @@ bool IOCPServer::CreateAccepterThread()
 	return true;
 }
 
+/// <summary>
+/// ClientInfo 풀에서 미사용 ClientInfo 구조체를 반환한다.
+/// </summary>
 ClientInfo* IOCPServer::GetEmptyClientInfo()
 {
 	for (auto& client_info : client_info_list_)
@@ -179,6 +246,9 @@ ClientInfo* IOCPServer::GetEmptyClientInfo()
 	return nullptr;
 }
 
+/// <summary>
+/// IOCP 객체에 클라이언트 소켓 및 CompletionKey를 연결한다.
+/// </summary>
 bool IOCPServer::BindIOCompletionPort(ClientInfo* p_client_info)
 {
 	// 클라이언트 소켓을 Completion Port에 바인드
@@ -194,6 +264,9 @@ bool IOCPServer::BindIOCompletionPort(ClientInfo* p_client_info)
 	return true;
 }
 
+/// <summary>
+/// WSARecv Overlapped I/O 작업을 요청한다.
+/// </summary>
 bool IOCPServer::BindRecv(ClientInfo* p_client_info)
 {
 	DWORD flag = 0;
@@ -224,6 +297,9 @@ bool IOCPServer::BindRecv(ClientInfo* p_client_info)
 	return true;
 }
 
+/// <summary>
+/// WSASend Overlapped I/O 작업을 요청한다.
+/// </summary>
 bool IOCPServer::SendMsg(ClientInfo* p_client_info, char* p_msg, uint32_t len)
 {
 	DWORD sent_bytes = 0;
@@ -256,6 +332,9 @@ bool IOCPServer::SendMsg(ClientInfo* p_client_info, char* p_msg, uint32_t len)
 	return true;
 }
 
+/// <summary>
+/// Overlapped I/O 작업 완료 통지를 처리하는 워커 쓰레드
+/// </summary>
 void IOCPServer::WorkerThread()
 {
 	// CompletionKey
@@ -277,7 +356,7 @@ void IOCPServer::WorkerThread()
 											 &p_overlapped, INFINITE);
 
 		// 쓰레드 종료 메시지인지 체크
- 		if (TerminateMsg(io_size, p_overlapped)) {
+ 		if (TerminateMsg(gqcs_ret, io_size, p_overlapped)) {
 			std::cout << "[WorkerThread] Received Finish Message\n";
 
 			// 다른 쓰레드들도 종료될 수 있도록 메시지 전달
@@ -295,6 +374,9 @@ void IOCPServer::WorkerThread()
 	}
 }
 
+/// <summary>
+/// GetQueuedCompletionStatus 결과에 따라 정상 처리 여부를 반환한다.
+/// </summary>
 bool IOCPServer::CheckGQCSResult(ClientInfo* p_client_info, bool gqcs_ret, DWORD io_size, LPOVERLAPPED p_overlapped)
 {
 	// 클라이언트 접속 종료
@@ -319,7 +401,9 @@ bool IOCPServer::CheckGQCSResult(ClientInfo* p_client_info, bool gqcs_ret, DWORD
 	return true;
 }
 
-
+/// <summary>
+/// Overlapped의 I/O 타입에 따라 Recv 혹은 Send 완료 루틴을 수행한다.
+/// </summary>
 void IOCPServer::DispatchOverlapped(ClientInfo* p_client_info, DWORD io_size, LPOVERLAPPED p_overlapped)
 {
 	// 확장 Overlapped 구조체로 캐스팅
@@ -352,6 +436,9 @@ void IOCPServer::DispatchOverlapped(ClientInfo* p_client_info, DWORD io_size, LP
 	}
 }
 
+/// <summary>
+/// 동기 Accept 작업을 처리하는 Accepter 쓰레드
+/// </summary>
 void IOCPServer::AccepterThread()
 {
 	while (is_accepter_running_)
@@ -408,6 +495,10 @@ void IOCPServer::AccepterThread()
 	}
 }
 
+/// <summary> <para>
+/// 소켓 연결을 종료시킨다. </para><para>
+/// is_force가 true라면 RST 처리한다. </para>
+/// </summary>
 void IOCPServer::CloseSocket(ClientInfo* p_client_info, bool is_force)
 {
 	if (p_client_info == NULL) {
@@ -432,6 +523,9 @@ void IOCPServer::CloseSocket(ClientInfo* p_client_info, bool is_force)
 	--client_cnt_;
 }
 
+/// <summary>
+/// ClientInfo 구조체를 재사용하기 위해 초기화한다.
+/// </summary>
 void IOCPServer::ClearClientInfo(ClientInfo* p_client_info)
 {
 	// ClientInfo 구조체 초기화

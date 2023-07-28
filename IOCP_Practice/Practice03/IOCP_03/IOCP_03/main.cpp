@@ -33,8 +33,7 @@ int main()
 			char key = _getch();
 
 			if (key == 'q' || key == 'Q') {
-				server.PostTerminateMsg();
-				server.DestroyThread();
+				server.Terminate();
 			}
 		}
 	}

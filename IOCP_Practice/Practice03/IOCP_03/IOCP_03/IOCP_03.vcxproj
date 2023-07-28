@@ -131,7 +131,7 @@
     <ClInclude Include="iocp_server.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="define_struct.h" />
+    <ClCompile Include="define.h" />
     <ClCompile Include="echo_server.cpp" />
     <ClCompile Include="iocp_server.cpp" />
     <ClCompile Include="main.cpp" />
