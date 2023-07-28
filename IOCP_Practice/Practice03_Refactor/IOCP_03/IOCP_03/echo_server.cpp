@@ -2,7 +2,11 @@
 
 #include <iostream>
 
-bool EchoServer::Start()
+/// <summary> <para>
+/// 정의해둔 콜백함수를 네트워크 클래스에 세팅하고, </para> <para>
+/// 네트워크를 시작한다. </para>
+/// </summary>
+bool EchoServer::Start(int32_t max_session_cnt, int32_t session_buf_size)
 {
 	is_server_running_ = true;
 
@@ -13,73 +17,89 @@ bool EchoServer::Start()
 	if (!network_.InitSocket())
 	{
 		std::cout << "[StartServer] Failed to Initialize\n";
-		return -1;
+		return false;
 	}
 
 	if (!network_.BindAndListen(7777))
 	{
 		std::cout << "[StartServer] Failed to Bind And Listen\n";
-		return -1;
+		return false;
 	}
 
-	if (!network_.StartNetwork(1000))
+	if (!network_.StartNetwork(max_session_cnt, session_buf_size))
 	{
 		std::cout << "[StartServer] Failed to Start\n";
-		return -1;
+		return false;
 	}
 
 	std::cout << "[StartServer] Successed to Start Server\n";
+	return true;
 }
 
+/// <summary>
+/// 네트워크 클래스를 종료시키고 서버를 종료한다.
+/// </summary>
 void EchoServer::Terminate()
 {
 	network_.Terminate();
 	is_server_running_ = false;
 }
 
-void EchoServer::OnAccept(Session* p_client_info)
+/// <summary>
+/// 네트워크 단에서 Accept시에 수행되는 콜백 함수이다.
+/// </summary>
+void EchoServer::OnAccept(Session* p_session)
 {
 	char ip[16];
 	uint16_t port;
 
 	// IP 및 포트번호 가져오기
-	if (GetClientIpPort(p_client_info, ip, sizeof(ip), port))
+	if (GetSessionIpPort(p_session, ip, sizeof(ip), port))
 	{
 		// 새로운 접속 로그 출력
 		std::cout << "[OnAccept] " << ip << ":" << port << " Entered" << "\n";
 	}
 }
 
-void EchoServer::OnRecv(Session* p_client_info, DWORD io_size)
+/// <summary>
+/// 네트워크 단에서 Recv시에 수행되는 콜백 함수이다.
+/// </summary>
+void EchoServer::OnRecv(Session* p_session, DWORD io_size)
 {
 	// 디버깅용으로 받은 메시지 출력
-	p_client_info->recv_buf_[io_size] = '\0';
-	std::cout << "[OnRecvMsg] " << p_client_info->recv_buf_ << "\n";
+	p_session->recv_buf_[io_size] = '\0';
+	std::cout << "[OnRecvMsg] " << p_session->recv_buf_ << "\n";
 
 	// 받은 메시지를 그대로 재전송한다.
-	network_.SendMsg(p_client_info, p_client_info->recv_buf_, io_size);
+	network_.SendMsg(p_session, p_session->recv_buf_, io_size);
 }
 
-void EchoServer::OnDisconnect(Session* p_client_info)
+/// <summary>
+/// 네트워크 단에서 세션 Disconnect시에 수행되는 콜백 함수이다.
+/// </summary>
+void EchoServer::OnDisconnect(Session* p_session)
 {
 	char ip[16];
 	uint16_t port;
 
 	// IP 및 포트번호 가져오기
-	if (GetClientIpPort(p_client_info, ip, sizeof(ip), port))
+	if (GetSessionIpPort(p_session, ip, sizeof(ip), port))
 	{
 		// 접속 종료 로그 출력
 		std::cout << "[OnDisconnect] " << ip << ":" << port << " Leaved" << "\n";
 	}
 }
 
-bool EchoServer::GetClientIpPort(Session* p_client_info, char* ip_dest, int32_t ip_len, uint16_t& port_dest)
+/// <summary>
+/// 세션 데이터를 토대로 IP 주소와 포트 번호를 가져온다.
+/// </summary>
+bool EchoServer::GetSessionIpPort(Session* p_session, char* ip_dest, int32_t ip_len, uint16_t& port_dest)
 {
-	// Client Peer 정보 가져오기
-	SOCKADDR_IN client_addr;
-	int32_t client_addr_len = sizeof(client_addr);
+	// Peer 정보 가져오기
+	SOCKADDR_IN session_addr;
+	int32_t session_addr_len = sizeof(session_addr);
 	
-	int32_t peerResult = getpeername(p_client_info->client_socket_, (sockaddr*)&client_addr, &client_addr_len);
+	int32_t peerResult = getpeername(p_session->socket_, (sockaddr*)&session_addr, &session_addr_len);
 	if (peerResult == SOCKET_ERROR)
 	{
 		std::cout << "[GetClientIpPort] Failed to Get Peer Name\n";
@@ -87,10 +107,10 @@ bool EchoServer::GetClientIpPort(Session* p_client_info, char* ip_dest, int32_t 
 	}
 
 	// IP 주소 문자열로 변환
-	inet_ntop(AF_INET, &client_addr.sin_addr, ip_dest, ip_len);
+	inet_ntop(AF_INET, &session_addr.sin_addr, ip_dest, ip_len);
 
 	// 포트 정보
-	port_dest = client_addr.sin_port;
+	port_dest = session_addr.sin_port;
 
 	return true;
 }

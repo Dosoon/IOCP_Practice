@@ -69,12 +69,12 @@ bool Network::BindAndListen(const uint16_t port, int32_t backlog_queue_size)
 }
 
 /// <summary>
-/// ClientInfo 풀 생성, IOCP 생성, 워커쓰레드 생성, Accepter 쓰레드 생성
+/// Session 풀 생성, IOCP 생성, 워커쓰레드 생성, Accepter 쓰레드 생성
 /// </summary>
-bool Network::StartNetwork(const uint32_t max_client_count)
+bool Network::StartNetwork(const uint32_t max_session_cnt, const int32_t session_buf_size)
 {
-	// ClientInfo 풀 생성
-	CreateClientPool(max_client_count);
+	// Session 풀 생성
+	CreateSessionPool(max_session_cnt, session_buf_size);
 
 	// IOCP 생성
 	iocp_ = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
@@ -180,20 +180,20 @@ bool Network::DestroyAccepterThread()
 }
 
 /// <summary>
-/// ClientInfo 풀에 ClientInfo들을 생성한다.
+/// Session 풀에 Session들을 생성한다.
 /// </summary>
-void Network::CreateClientPool(const uint32_t max_client_count)
+void Network::CreateSessionPool(const uint32_t max_session_cnt, const int32_t session_buf_size)
 {
 	// reallocation 방지를 위한 reserve
-	client_info_list_.reserve(max_client_count);
+	session_list_.reserve(max_session_cnt);
 
-	// ClientInfo 생성
-	for (uint32_t i = 0; i < max_client_count; i++)
+	// Session 생성
+	for (uint32_t i = 0; i < max_session_cnt; i++)
 	{
-		client_info_list_.emplace_back(1024);
+		session_list_.emplace_back(session_buf_size);
 	}
 
-	std::cout << "[CreateClient] OK\n";
+	std::cout << "[CreateSessionPool] OK\n";
 }
 
 /// <summary>
@@ -228,14 +228,14 @@ bool Network::CreateAccepterThread()
 }
 
 /// <summary>
-/// ClientInfo 풀에서 미사용 ClientInfo 구조체를 반환한다.
+/// Session 풀에서 미사용 Session 구조체를 반환한다.
 /// </summary>
-Session* Network::GetEmptyClientInfo()
+Session* Network::GetEmptySession()
 {
-	for (auto& client_info : client_info_list_)
+	for (auto& session : session_list_)
 	{
-		if (client_info.client_socket_ == INVALID_SOCKET) {
-			return &client_info;
+		if (session.socket_ == INVALID_SOCKET) {
+			return &session;
 		}
 	}
 
@@ -243,12 +243,12 @@ Session* Network::GetEmptyClientInfo()
 }
 
 /// <summary>
-/// IOCP 객체에 클라이언트 소켓 및 CompletionKey를 연결한다.
+/// IOCP 객체에 세션 소켓 및 CompletionKey를 연결한다.
 /// </summary>
 bool Network::BindIOCompletionPort(Session* p_session)
 {
-	// 클라이언트 소켓을 Completion Port에 바인드
-	auto handle = CreateIoCompletionPort(reinterpret_cast<HANDLE>(p_session->client_socket_),
+	// 세션 소켓을 Completion Port에 바인드
+	auto handle = CreateIoCompletionPort(reinterpret_cast<HANDLE>(p_session->socket_),
 									     iocp_, reinterpret_cast<ULONG_PTR>(p_session), 0);
 
 	// 바인드 성공여부 확인
@@ -274,7 +274,7 @@ bool Network::BindRecv(Session* p_session)
 	p_session->recv_overlapped_ex_.op_type_ = IOOperation::kRECV;
 
 	// Recv 요청
-	auto recv_ret = WSARecv(p_session->client_socket_,
+	auto recv_ret = WSARecv(p_session->socket_,
 							&p_session->recv_overlapped_ex_.wsa_buf_,
 							1, &recved_bytes, &flag,
 							&p_session->recv_overlapped_ex_.wsa_overlapped_,
@@ -309,7 +309,7 @@ bool Network::SendMsg(Session* p_session, char* p_msg, uint32_t len)
 	p_session->send_overlapped_ex_.op_type_ = IOOperation::kSEND;
 
 	// Send 요청
-	auto send_ret = WSASend(p_session->client_socket_,
+	auto send_ret = WSASend(p_session->socket_,
 							&p_session->send_overlapped_ex_.wsa_buf_,
 							1, &sent_bytes, 0,
 							&p_session->send_overlapped_ex_.wsa_overlapped_,
@@ -375,16 +375,16 @@ void Network::WorkerThread()
 /// </summary>
 bool Network::CheckGQCSResult(Session* p_session, bool gqcs_ret, DWORD io_size, LPOVERLAPPED p_overlapped)
 {
-	// 클라이언트 접속 종료
-	if (ClientExited(gqcs_ret, io_size, p_overlapped)) {
+	// 세션 접속 종료
+	if (SessionExited(gqcs_ret, io_size, p_overlapped)) {
 
 		// 접속 종료 전에 수행되어야 할 로직
 		OnDisconnect(p_session);
 
-		// 소켓 닫고 ClientInfo 초기화
+		// 소켓 닫고 Session 초기화
 		CloseSocket(p_session);
 
-		std::cout << "[WorkerThread] Client Exited\n";
+		std::cout << "[WorkerThread] Session Exited\n";
 		return false;
 	}
 
@@ -443,10 +443,10 @@ void Network::AccepterThread()
 		SOCKADDR_IN accepted_addr;
 		int32_t accepted_addr_len = sizeof(accepted_addr);
 
-		// Max Client Count에 달하지 않았다면, ClientInfo 풀에서 하나를 가져옴
-		Session* p_accepted_client_info = GetEmptyClientInfo();
-		if (p_accepted_client_info == NULL) {
-			std::cout << "[AccepterThread] Current Client Count is MAX\n";
+		// Max Session Count에 달하지 않았다면, Session 풀에서 하나를 가져옴
+		Session* p_accepted_session = GetEmptySession();
+		if (p_accepted_session == NULL) {
+			std::cout << "[AccepterThread] Current Session Count is MAX\n";
 			return;
 		}
 
@@ -469,25 +469,25 @@ void Network::AccepterThread()
 			continue;
 		}
 
-		p_accepted_client_info->client_socket_ = accepted_socket;
-		std::cout << "[AccepterThread] New Client Accepted\n";
+		p_accepted_session->socket_ = accepted_socket;
+		std::cout << "[AccepterThread] New Session Accepted\n";
 
 		// 완료 통지 포트에 바인드
-		if (!BindIOCompletionPort(p_accepted_client_info))
+		if (!BindIOCompletionPort(p_accepted_session))
 		{
 			return;
 		}
 
 		// Recv 요청
-		if (!BindRecv(p_accepted_client_info))
+		if (!BindRecv(p_accepted_session))
 		{
 			return;
 		}
 
 		// Accept 직후 로직 수행
-		OnAccept(p_accepted_client_info);
+		OnAccept(p_accepted_session);
 
-		++client_cnt_;
+		++session_cnt_;
 	}
 }
 
@@ -509,23 +509,23 @@ void Network::CloseSocket(Session* p_session, bool is_force)
 	}
 
 	// Linger 옵션 설정
-	setsockopt(p_session->client_socket_, SOL_SOCKET,
+	setsockopt(p_session->socket_, SOL_SOCKET,
 			   SO_LINGER, reinterpret_cast<const char*>(&linger), sizeof(linger));
 
-	// 소켓 닫고, ClientInfo 초기화 후 풀에 반납
-	closesocket(p_session->client_socket_);
-	ClearClientInfo(p_session);
+	// 소켓 닫고, Session 초기화 후 풀에 반납
+	closesocket(p_session->socket_);
+	ClearSession(p_session);
 
-	--client_cnt_;
+	--session_cnt_;
 }
 
 /// <summary>
-/// ClientInfo 구조체를 재사용하기 위해 초기화한다.
+/// Session 구조체를 재사용하기 위해 초기화한다.
 /// </summary>
-void Network::ClearClientInfo(Session* p_session)
+void Network::ClearSession(Session* p_session)
 {
-	// ClientInfo 구조체 초기화
+	// Session 구조체 초기화
 	ZeroMemory(&p_session->recv_overlapped_ex_, sizeof(OverlappedEx));
 	ZeroMemory(&p_session->send_overlapped_ex_, sizeof(OverlappedEx));
-	p_session->client_socket_ = INVALID_SOCKET;
+	p_session->socket_ = INVALID_SOCKET;
 }

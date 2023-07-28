@@ -20,10 +20,10 @@ public:
 	bool InitSocket();
 	bool BindAndListen(const uint16_t port, const int32_t backlog_queue_size = 5);
 	bool CreateThread();
-	bool StartNetwork(const uint32_t max_client_count);
+	bool StartNetwork(const uint32_t max_session_cnt, const int32_t session_buf_size);
 	void Terminate();
 	void DestroyThread();
-	bool SendMsg(Session* p_client_info, char* p_msg, uint32_t len);
+	bool SendMsg(Session* p_session, char* p_msg, uint32_t len);
 	void PostTerminateMsg()
 	{
 		PostQueuedCompletionStatus(iocp_, 0, NULL, NULL);
@@ -45,22 +45,22 @@ public:
 	}
 
 private:
-	void CreateClientPool(const uint32_t max_client_count);
+	void CreateSessionPool(const uint32_t max_session_cnt, const int32_t session_buf_size);
 	bool CreateWorkerThread();
 	bool CreateAccepterThread();
 
-	Session* GetEmptyClientInfo();
-	bool BindIOCompletionPort(Session* p_client_info);
-	bool BindRecv(Session* p_client_info);
+	Session* GetEmptySession();
+	bool BindIOCompletionPort(Session* p_session);
+	bool BindRecv(Session* p_session);
 
 	void WorkerThread();
 	void AccepterThread();
 
-	void CloseSocket(Session* p_client_info, bool is_force = false);
-	void ClearClientInfo(Session* p_client_info);
+	void CloseSocket(Session* p_session, bool is_force = false);
+	void ClearSession(Session* p_session);
 
-	void DispatchOverlapped(Session* p_client_info, DWORD io_size, LPOVERLAPPED p_overlapped);
-	bool CheckGQCSResult(Session* p_client_info, bool gqcs_ret, DWORD io_size, LPOVERLAPPED p_overlapped);
+	void DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED p_overlapped);
+	bool CheckGQCSResult(Session* p_session, bool gqcs_ret, DWORD io_size, LPOVERLAPPED p_overlapped);
 
 	bool DestroyWorkerThread();
 	bool DestroyAccepterThread();
@@ -76,7 +76,7 @@ private:
 	/// <summary>
 	/// 클라이언트가 접속 종료했는지 확인한다.
 	/// </summary>
-	bool ClientExited(bool gqcs_ret, DWORD io_size, LPOVERLAPPED p_overlapped)
+	bool SessionExited(bool gqcs_ret, DWORD io_size, LPOVERLAPPED p_overlapped)
 	{
 		return (gqcs_ret == false || (p_overlapped != NULL && io_size == 0));
 	}
@@ -98,9 +98,9 @@ private:
 		return std::thread::hardware_concurrency() * 2 + 1;
 	}
 
-	std::vector<Session>		client_info_list_;
+	std::vector<Session>		session_list_;
 	SOCKET						listen_socket_ = INVALID_SOCKET;
-	uint32_t					client_cnt_ = 0;
+	uint32_t					session_cnt_ = 0;
 	std::vector<std::thread>	worker_thread_list_;
 	std::thread					accepter_thread_;
 	HANDLE						iocp_ = INVALID_HANDLE_VALUE;

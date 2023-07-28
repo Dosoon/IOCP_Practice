@@ -9,7 +9,7 @@ int main()
 
 	EchoServer server;
 
-	server.Start();
+	server.Start(1000, 1024);
 
 	while (server.IsServerRunning()) {
 		if (_kbhit()) {

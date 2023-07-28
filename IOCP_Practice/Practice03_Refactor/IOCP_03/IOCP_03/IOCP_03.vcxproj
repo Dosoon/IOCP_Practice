@@ -132,7 +132,7 @@
     <ClInclude Include="session_define.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="overlapped_define.h" />
+    <ClCompile Include="overlapped_ex_define.h" />
     <ClCompile Include="echo_server.cpp" />
     <ClCompile Include="network.cpp" />
     <ClCompile Include="main.cpp" />
