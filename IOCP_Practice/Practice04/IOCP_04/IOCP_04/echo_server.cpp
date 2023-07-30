@@ -4,7 +4,7 @@
 
 /// <summary> <para>
 /// 정의해둔 콜백함수를 네트워크 클래스에 세팅하고, </para> <para>
-/// 네트워크를 시작한다. </para>
+/// 로직 스레드 생성 후 네트워크를 시작한다. </para>
 /// </summary>
 bool EchoServer::Start(int32_t max_session_cnt, int32_t session_buf_size)
 {
@@ -14,20 +14,22 @@ bool EchoServer::Start(int32_t max_session_cnt, int32_t session_buf_size)
 	network_.SetOnRecv(std::bind(&EchoServer::OnRecv, this, std::placeholders::_1, std::placeholders::_2));
 	network_.SetOnDisconnect(std::bind(&EchoServer::OnDisconnect, this, std::placeholders::_1));
 
-	if (!network_.InitSocket())
-	{
+	if (!CreatePacketProcessThread()) {
+		std::cout << "[StartServer] Failed to Create Packet Process Thread\n";
+		return false;
+	}
+
+	if (!network_.InitSocket()) {
 		std::cout << "[StartServer] Failed to Initialize\n";
 		return false;
 	}
 
-	if (!network_.BindAndListen(7777))
-	{
+	if (!network_.BindAndListen(7777)) {
 		std::cout << "[StartServer] Failed to Bind And Listen\n";
 		return false;
 	}
 
-	if (!network_.StartNetwork(max_session_cnt, session_buf_size))
-	{
+	if (!network_.StartNetwork(max_session_cnt, session_buf_size)) {
 		std::cout << "[StartServer] Failed to Start\n";
 		return false;
 	}
@@ -113,4 +115,36 @@ bool EchoServer::GetSessionIpPort(Session* p_session, char* ip_dest, int32_t ip_
 	port_dest = session_addr.sin_port;
 
 	return true;
+}
+
+/// <summary>
+/// Packet 처리 쓰레드를 생성한다.
+/// </summary>
+bool EchoServer::CreatePacketProcessThread()
+{
+	packet_process_thread_ = std::thread([this]() { PacketProcessThread(); });
+
+	std::cout << "[CreatePacketProcessThread] OK\n";
+	return true;
+}
+
+/// <summary>
+/// packet_deque_에서 패킷을 하나씩 deque해 처리하는
+/// Packet Process 쓰레드 내용을 정의한다.
+/// </summary>
+void EchoServer::PacketProcessThread()
+{
+	while (is_server_running_)
+	{
+		// 패킷 디큐
+		Packet packet = DequePacket();
+
+		// 패킷 처리 로직
+		if (packet.data_size == 0) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		else {
+			network_.SendMsg(packet.session_index_, packet.data, packet.data_size);
+		}
+	}
 }

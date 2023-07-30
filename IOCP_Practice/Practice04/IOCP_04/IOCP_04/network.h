@@ -6,7 +6,7 @@
 #include <thread>
 #include <vector>
 #include <functional>
-#include "session_define.h"
+#include "session.h"
 
 class Network
 {
@@ -23,6 +23,7 @@ public:
 	bool StartNetwork(const uint32_t max_session_cnt, const int32_t session_buf_size);
 	void Terminate();
 	void DestroyThread();
+	// TODO : 인덱스 기반으로 변경
 	bool SendMsg(Session* p_session, char* p_msg, uint32_t len);
 	void PostTerminateMsg()
 	{
@@ -45,7 +46,7 @@ public:
 	}
 
 private:
-	void CreateSessionPool(const uint32_t max_session_cnt, const int32_t session_buf_size);
+	void CreateSessionPool(const int32_t max_session_cnt, const int32_t session_buf_size);
 	bool CreateWorkerThread();
 	bool CreateAccepterThread();
 

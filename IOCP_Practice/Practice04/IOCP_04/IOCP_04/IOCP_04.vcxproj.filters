@@ -35,7 +35,10 @@
     <ClInclude Include="overlapped_ex_define.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="session_define.h">
+    <ClInclude Include="session.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="packet.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

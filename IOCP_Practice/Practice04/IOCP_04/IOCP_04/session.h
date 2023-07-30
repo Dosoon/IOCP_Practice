@@ -14,7 +14,8 @@ public:
 
 	};
 
-	Session(int32_t buf_size) {
+	Session(int32_t index, int32_t buf_size) {
+		index_ = index;
 		buf_size_ = buf_size;
 
 		ZeroMemory(&recv_overlapped_ex_, sizeof(OverlappedEx));

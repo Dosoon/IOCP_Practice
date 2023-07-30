@@ -182,15 +182,15 @@ bool Network::DestroyAccepterThread()
 /// <summary>
 /// Session 풀에 Session들을 생성한다.
 /// </summary>
-void Network::CreateSessionPool(const uint32_t max_session_cnt, const int32_t session_buf_size)
+void Network::CreateSessionPool(const int32_t max_session_cnt, const int32_t session_buf_size)
 {
 	// reallocation 방지를 위한 reserve
 	session_list_.reserve(max_session_cnt);
 
 	// Session 생성
-	for (uint32_t i = 0; i < max_session_cnt; i++)
+	for (int32_t i = 0; i < max_session_cnt; i++)
 	{
-		session_list_.emplace_back(session_buf_size);
+		session_list_.emplace_back(i, session_buf_size);
 	}
 
 	std::cout << "[CreateSessionPool] OK\n";
