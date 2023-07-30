@@ -4,11 +4,13 @@
 
 #include "overlapped_ex_define.h"
 
+#define DEFAULT_BUF_SIZE 1024
+
 // 접속 세션 정보
 class Session
 {
 public:
-	Session() {
+	Session() : recv_overlapped_ex_(), send_overlapped_ex_() {
 
 	};
 
@@ -28,11 +30,11 @@ public:
 		delete[] send_buf_;
 	}
 
-	int32_t			index_;						// 세션 인덱스
-	SOCKET			socket_;					// 클라이언트 소켓
-	int32_t			buf_size_;					// 버퍼 크기
-	char*			recv_buf_;					// 수신 데이터 버퍼
-	char*			send_buf_;					// 송신 데이터 버퍼
-	OverlappedEx	recv_overlapped_ex_;		// Recv I/O를 위한 OverlappedEx 구조체
-	OverlappedEx	send_overlapped_ex_;		// Send I/O를 위한 OverlappedEx 구조체
+	int32_t			index_ = -1;					// 세션 인덱스
+	SOCKET			socket_ = INVALID_SOCKET;		// 클라이언트 소켓
+	int32_t			buf_size_ = DEFAULT_BUF_SIZE;	// 버퍼 크기
+	char*			recv_buf_ = nullptr;			// 수신 데이터 버퍼
+	char*			send_buf_ = nullptr;			// 송신 데이터 버퍼
+	OverlappedEx	recv_overlapped_ex_;			// Recv I/O를 위한 OverlappedEx 구조체
+	OverlappedEx	send_overlapped_ex_;			// Send I/O를 위한 OverlappedEx 구조체
 };

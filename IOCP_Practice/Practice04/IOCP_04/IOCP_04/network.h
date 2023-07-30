@@ -106,7 +106,6 @@ private:
 	HANDLE						iocp_ = INVALID_HANDLE_VALUE;
 	bool						is_worker_running_ = true;
 	bool						is_accepter_running_ = true;
-	char						socket_buf_[1024];
 
 	std::function<void(Session*)>			OnAccept = NULL;
 	std::function<void(Session*, DWORD)>	OnRecv = NULL;
