@@ -296,30 +296,35 @@ bool Network::BindRecv(Session* p_session)
 /// <summary>
 /// WSASend Overlapped I/O 작업을 요청한다.
 /// </summary>
-bool Network::SendMsg(Session* p_session, char* p_msg, uint32_t len)
+bool Network::SendMsg(int32_t session_idx, char* p_msg, uint32_t len)
 {
 	DWORD sent_bytes = 0;
 
-	// p_msg -> overlappped 버퍼로 전송할 메시지 복사
-	CopyMemory(p_session->send_buf_, p_msg, len);
+	// 인덱스로 세션 정보 가져옴
+	auto p_session = &session_list_[session_idx];
 
-	// 버퍼 정보 및 I/O Operation 타입 설정
-	p_session->send_overlapped_ex_.wsa_buf_.len = len;
-	p_session->send_overlapped_ex_.wsa_buf_.buf = p_session->send_buf_;
-	p_session->send_overlapped_ex_.op_type_ = IOOperation::kSEND;
+	// 소켓, 버퍼 정보 및 I/O Operation 타입 설정
+	auto send_overlapped_ex = new OverlappedEx();
+	send_overlapped_ex->socket_ = p_session->socket_;
+	send_overlapped_ex->op_type_ = IOOperation::kSEND;
+	send_overlapped_ex->wsa_buf_.len = len;
+	send_overlapped_ex->wsa_buf_.buf = new char[len];
+
+	// p_msg -> overlappped 버퍼로 전송할 메시지 복사
+	CopyMemory(send_overlapped_ex->wsa_buf_.buf, p_msg, len);
 
 	// Send 요청
 	auto send_ret = WSASend(p_session->socket_,
-							&p_session->send_overlapped_ex_.wsa_buf_,
+							&send_overlapped_ex->wsa_buf_,
 							1, &sent_bytes, 0,
-							&p_session->send_overlapped_ex_.wsa_overlapped_,
+							reinterpret_cast<LPWSAOVERLAPPED>(send_overlapped_ex),
 							NULL);
 
 	// 에러 처리
 	if (send_ret == SOCKET_ERROR) {
 		auto err = WSAGetLastError();
 
-		if (err != ERROR_IO_PENDING) {
+		if (!AcceptableErrorCode(err)) {
 			std::cout << "[SendMsg] Failed With Error Code : " << err << '\n';
 			return false;
 		}
@@ -428,6 +433,9 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 		// Send 완료
 		std::cout << "[WorkerThread] Send Completion : " << io_size << " Bytes\n";
 
+		// OverlappedEx 삭제
+		delete p_overlapped_ex;
+
 		return;
 	}
 }
@@ -526,6 +534,5 @@ void Network::ClearSession(Session* p_session)
 {
 	// Session 구조체 초기화
 	ZeroMemory(&p_session->recv_overlapped_ex_, sizeof(OverlappedEx));
-	ZeroMemory(&p_session->send_overlapped_ex_, sizeof(OverlappedEx));
 	p_session->socket_ = INVALID_SOCKET;
 }

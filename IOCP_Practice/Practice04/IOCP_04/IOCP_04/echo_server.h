@@ -2,6 +2,7 @@
 #include "network.h"
 
 #include <deque>
+#include <mutex>
 
 #include "packet.h"
 
@@ -21,11 +22,15 @@ private:
 	void OnDisconnect(Session* p_session);
 	bool GetSessionIpPort(Session* p_session, char* ip_dest, int32_t ip_len, uint16_t& port_dest);
 	bool CreatePacketProcessThread();
+	bool DestroyPacketProcessThread();
 	void PacketProcessThread();
+	void EnqueuePacket(int32_t session_index, int32_t len, char* data_src);
 	Packet DequePacket();
+
+	Network network_;
+	bool is_server_running_ = false;
 
 	std::thread packet_process_thread_;
 	std::deque<Packet> packet_deque_;
-	Network network_;
-	bool is_server_running_ = false;
+	std::mutex packet_deque_lock_;
 };

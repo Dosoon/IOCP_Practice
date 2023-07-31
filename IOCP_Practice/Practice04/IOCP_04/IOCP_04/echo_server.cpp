@@ -1,6 +1,7 @@
 #include "echo_server.h"
 
 #include <iostream>
+#include <mutex>
 
 /// <summary> <para>
 /// 정의해둔 콜백함수를 네트워크 클래스에 세팅하고, </para> <para>
@@ -39,12 +40,13 @@ bool EchoServer::Start(int32_t max_session_cnt, int32_t session_buf_size)
 }
 
 /// <summary>
-/// 네트워크 클래스를 종료시키고 서버를 종료한다.
+/// 네트워크 클래스와 패킷 처리 쓰레드를 종료시킨 후, 서버를 종료한다.
 /// </summary>
 void EchoServer::Terminate()
 {
 	network_.Terminate();
-	is_server_running_ = false;
+
+	DestroyPacketProcessThread();
 }
 
 /// <summary>
@@ -73,7 +75,7 @@ void EchoServer::OnRecv(Session* p_session, DWORD io_size)
 	std::cout << "[OnRecvMsg] " << p_session->recv_buf_ << "\n";
 
 	// 받은 메시지를 그대로 재전송한다.
-	network_.SendMsg(p_session, p_session->recv_buf_, io_size);
+	EnqueuePacket(p_session->index_, io_size, p_session->recv_buf_);
 }
 
 /// <summary>
@@ -129,6 +131,22 @@ bool EchoServer::CreatePacketProcessThread()
 }
 
 /// <summary>
+/// Packet 처리 쓰레드를 종료한다.
+/// </summary>
+bool EchoServer::DestroyPacketProcessThread()
+{
+	is_server_running_ = false;
+
+	if (packet_process_thread_.joinable())
+	{
+		packet_process_thread_.join();
+	}
+
+	std::cout << "[DestroyPacketProcessThread] OK\n";
+	return true;
+}
+
+/// <summary>
 /// packet_deque_에서 패킷을 하나씩 deque해 처리하는
 /// Packet Process 쓰레드 내용을 정의한다.
 /// </summary>
@@ -137,14 +155,49 @@ void EchoServer::PacketProcessThread()
 	while (is_server_running_)
 	{
 		// 패킷 디큐
-		Packet packet = DequePacket();
+		auto packet = DequePacket();
 
 		// 패킷 처리 로직
+		// 패킷이 없다면 1ms간 Block
 		if (packet.data_size == 0) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
+		// 에코 서버 로직 : 그대로 재전송
 		else {
 			network_.SendMsg(packet.session_index_, packet.data, packet.data_size);
+
+			// 패킷 데이터 삭제
+			delete[] packet.data;
 		}
+	}
+}
+
+/// <summary>
+/// Packet Deque에 새 패킷을 추가한다.
+/// </summary>
+void EchoServer::EnqueuePacket(int32_t session_index, int32_t len, char* data_src)
+{
+	std::lock_guard<std::mutex> lock(packet_deque_lock_);
+	
+	auto packet_data = new char[len];
+	CopyMemory(packet_data, data_src, len);
+
+	packet_deque_.emplace_back(session_index, len, packet_data);
+}
+
+/// <summary>
+/// Packet Deque에서 가장 먼저 들어온 패킷을 하나 Deque하고, 없으면 빈 패킷을 반환한다.
+/// </summary>
+Packet EchoServer::DequePacket()
+{
+	std::lock_guard<std::mutex> lock(packet_deque_lock_);
+
+	if (packet_deque_.empty()) {
+		return Packet();
+	}
+	else {
+		auto packet = packet_deque_.front();
+		packet_deque_.pop_front();
+		return packet;
 	}
 }

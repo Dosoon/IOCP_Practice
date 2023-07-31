@@ -23,8 +23,7 @@ public:
 	bool StartNetwork(const uint32_t max_session_cnt, const int32_t session_buf_size);
 	void Terminate();
 	void DestroyThread();
-	// TODO : 인덱스 기반으로 변경
-	bool SendMsg(Session* p_session, char* p_msg, uint32_t len);
+	bool SendMsg(int32_t session_idx, char* p_msg, uint32_t len);
 	void PostTerminateMsg()
 	{
 		PostQueuedCompletionStatus(iocp_, 0, NULL, NULL);
@@ -97,6 +96,11 @@ private:
 	int32_t GetMaxWorkerThread()
 	{
 		return std::thread::hardware_concurrency() * 2 + 1;
+	}
+
+	bool AcceptableErrorCode(int32_t errorCode)
+	{
+		return errorCode == ERROR_IO_PENDING || errorCode == WSAENOTSOCK;
 	}
 
 	std::vector<Session>		session_list_;

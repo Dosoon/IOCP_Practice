@@ -13,7 +13,7 @@ int main()
 
 	while (server.IsServerRunning()) {
 		if (_kbhit()) {
-			char key = _getch();
+			auto key = _getch();
 
 			if (key == 'q' || key == 'Q') {
 				server.Terminate();
