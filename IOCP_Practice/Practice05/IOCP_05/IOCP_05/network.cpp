@@ -113,6 +113,14 @@ bool Network::CreateThread()
 		return false;
 	}
 
+	// Sender 스레드 생성
+	auto create_sender_ret = CreateSenderThread();
+	if (!create_sender_ret)
+	{
+		std::cout << "[CreateSenderThread] Failed\n";
+		return false;
+	}
+
 	return true;
 }
 
@@ -143,10 +151,14 @@ void Network::DestroyThread()
 	if (DestroyAccepterThread()) {
 		std::cout << "[DestroyThread] Accepter Thread Destroyed\n";
 	}
+
+	if (DestroySenderThread()) {
+		std::cout << "[DestroyThread] Sender Thread Destroyed\n";
+	}
 }
 
 /// <summary>
-/// 워커 쓰레드를 모두 종료시킵니다.
+/// 워커 쓰레드를 모두 종료시킨다.
 /// </summary>
 bool Network::DestroyWorkerThread()
 {
@@ -164,7 +176,7 @@ bool Network::DestroyWorkerThread()
 }
 
 /// <summary>
-/// Accepter 쓰레드를 종료시킵니다.
+/// Accepter 쓰레드를 종료시킨다.
 /// </summary>
 bool Network::DestroyAccepterThread()
 {
@@ -174,6 +186,21 @@ bool Network::DestroyAccepterThread()
 
 	if (accepter_thread_.joinable()) {
 		accepter_thread_.join();
+	}
+
+	return true;
+}
+
+/// <summary>
+/// Sender 쓰레드를 종료시킨다.
+/// </summary>
+bool Network::DestroySenderThread()
+{
+	// Sender 쓰레드 종료
+	is_sender_running_ = false;
+	
+	if (sender_thread_.joinable()) {
+		sender_thread_.join();
 	}
 
 	return true;
@@ -190,7 +217,7 @@ void Network::CreateSessionPool(const int32_t max_session_cnt, const int32_t ses
 	// Session 생성
 	for (int32_t i = 0; i < max_session_cnt; i++)
 	{
-		session_list_.emplace_back(i, session_buf_size);
+		session_list_.emplace_back(new Session(i, session_buf_size));
 	}
 
 	std::cout << "[CreateSessionPool] OK\n";
@@ -228,14 +255,28 @@ bool Network::CreateAccepterThread()
 }
 
 /// <summary>
+/// SenderThread를 생성한다.
+/// </summary>
+bool Network::CreateSenderThread()
+{
+	sender_thread_ = std::thread([this]() { SenderThread(); });
+
+	std::cout << "[CreateSenderThread] OK\n";
+	return true;
+}
+
+/// <summary>
 /// Session 풀에서 미사용 Session 구조체를 반환한다.
 /// </summary>
 Session* Network::GetEmptySession()
 {
 	for (auto& session : session_list_)
 	{
-		if (session.socket_ == INVALID_SOCKET) {
-			return &session;
+		// CAS 연산을 통해 세션 활성화 여부를 확인하고, 사용되고 있음을 Flag 변수로 남김
+		bool activated_expected = false;
+		if (session->is_activated_
+					 .compare_exchange_strong(activated_expected, true)) {
+			return session;
 		}
 	}
 
@@ -286,46 +327,6 @@ bool Network::BindRecv(Session* p_session)
 
 		if (err != ERROR_IO_PENDING) {
 			std::cout << "[BindRecv] Failed With Error Code : " << err << '\n';
-			return false;
-		}
-	}
-
-	return true;
-}
-
-/// <summary>
-/// WSASend Overlapped I/O 작업을 요청한다.
-/// </summary>
-bool Network::SendMsg(int32_t session_idx, char* p_msg, uint32_t len)
-{
-	DWORD sent_bytes = 0;
-
-	// 인덱스로 세션 정보 가져옴
-	auto p_session = &session_list_[session_idx];
-
-	// 소켓, 버퍼 정보 및 I/O Operation 타입 설정
-	auto send_overlapped_ex = new OverlappedEx();
-	send_overlapped_ex->socket_ = p_session->socket_;
-	send_overlapped_ex->op_type_ = IOOperation::kSEND;
-	send_overlapped_ex->wsa_buf_.len = len;
-	send_overlapped_ex->wsa_buf_.buf = new char[len];
-
-	// p_msg -> overlappped 버퍼로 전송할 메시지 복사
-	CopyMemory(send_overlapped_ex->wsa_buf_.buf, p_msg, len);
-
-	// Send 요청
-	auto send_ret = WSASend(p_session->socket_,
-							&send_overlapped_ex->wsa_buf_,
-							1, &sent_bytes, 0,
-							reinterpret_cast<LPWSAOVERLAPPED>(send_overlapped_ex),
-							NULL);
-
-	// 에러 처리
-	if (send_ret == SOCKET_ERROR) {
-		auto err = WSAGetLastError();
-
-		if (!AcceptableErrorCode(err)) {
-			std::cout << "[SendMsg] Failed With Error Code : " << err << '\n';
 			return false;
 		}
 	}
@@ -436,6 +437,9 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 		// OverlappedEx 삭제
 		delete p_overlapped_ex;
 
+		// Send 사용 여부 해제
+		p_session->is_sending_.store(0);
+
 		return;
 	}
 }
@@ -499,16 +503,48 @@ void Network::AccepterThread()
 	}
 }
 
+/// <summary>
+/// 세션의 Send 작업을 수행하는 Sender 쓰레드
+/// </summary>
+void Network::SenderThread()
+{
+	while (is_sender_running_)
+	{
+		for (auto& session : session_list_)
+		{
+			// 보낼 데이터가 없다면 패스
+			if (!session->HasSendData()) {
+				continue;
+			}
+			// Send 요청, 실패시 연결 종료
+			else {
+				if (!session->BindSend()) {
+					CloseSocket(session);
+				}
+			}
+		}
+	}
+}
+
 /// <summary> <para>
 /// 소켓 연결을 종료시킨다. </para><para>
 /// is_force가 true라면 RST 처리한다. </para>
 /// </summary>
 void Network::CloseSocket(Session* p_session, bool is_force)
 {
+	// NULL 체크
 	if (p_session == NULL) {
 		return;
 	}
 
+	// CloseSocket 중복 호출 방지
+	bool activated_expected = true;
+	if (p_session->is_activated_
+				   .compare_exchange_strong(activated_expected, false) == false) {
+		return;
+	}
+
+	// 기본 Linger 옵션 세팅
 	LINGER linger = { 0, 0 };
 
 	// is_force가 true라면 RST 처리
@@ -532,7 +568,15 @@ void Network::CloseSocket(Session* p_session, bool is_force)
 /// </summary>
 void Network::ClearSession(Session* p_session)
 {
+	// 소켓 초기화
+	p_session->socket_ = INVALID_SOCKET;
+
 	// Session 구조체 초기화
 	ZeroMemory(&p_session->recv_overlapped_ex_, sizeof(OverlappedEx));
-	p_session->socket_ = INVALID_SOCKET;
+
+	// Send 링 버퍼 초기화
+	p_session->send_buf_.ClearBuffer();
+
+	// Send 사용 여부 초기화
+	p_session->is_sending_ = false;
 }

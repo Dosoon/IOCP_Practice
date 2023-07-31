@@ -1,8 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <mutex>
 
 #include "overlapped_ex_define.h"
+#include "ring_buffer.h"
 
 #define DEFAULT_BUF_SIZE 1024
 
@@ -28,9 +30,27 @@ public:
 		delete[] recv_buf_;
 	}
 
-	int32_t			index_ = -1;					// 세션 인덱스
-	SOCKET			socket_ = INVALID_SOCKET;		// 클라이언트 소켓
-	int32_t			buf_size_ = DEFAULT_BUF_SIZE;	// 버퍼 크기
-	char*			recv_buf_ = nullptr;			// 수신 데이터 버퍼
-	OverlappedEx	recv_overlapped_ex_;			// Recv I/O를 위한 OverlappedEx 구조체
+	bool BindSend();
+	int32_t EnqueueSendData(char* data, int32_t data_len);
+	bool HasSendData();
+	void SetWsaBuf(WSABUF* wsa_buf, int32_t& buffer_cnt);
+
+	/// <summary>
+	/// 연결 유지가 허용되는 에러 코드인지 검사한다.
+	/// </summary>
+	bool AcceptableErrorCode(int32_t errorCode)
+	{
+		return errorCode == ERROR_IO_PENDING || errorCode == WSAENOTSOCK;
+	}
+
+	std::atomic<bool>	is_activated_ = false;			// 현재 세션이 사용중인지 여부
+
+	int32_t				index_ = -1;					// 세션 인덱스
+	SOCKET				socket_ = INVALID_SOCKET;		// 클라이언트 소켓
+	int32_t				buf_size_ = DEFAULT_BUF_SIZE;	// 버퍼 크기
+	char*				recv_buf_ = nullptr;			// 수신 데이터 버퍼
+	RingBuffer			send_buf_;						// 송신 데이터용 링 버퍼
+	OverlappedEx		recv_overlapped_ex_;			// Recv I/O를 위한 OverlappedEx 구조체
+	std::atomic<bool>	is_sending_ = false;			// 현재 송신 중인지 여부
+	std::mutex			send_lock_;						// 송신 데이터에 대한 락
 };

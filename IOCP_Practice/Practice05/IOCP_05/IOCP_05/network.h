@@ -23,31 +23,52 @@ public:
 	bool StartNetwork(const uint32_t max_session_cnt, const int32_t session_buf_size);
 	void Terminate();
 	void DestroyThread();
-	bool SendMsg(int32_t session_idx, char* p_msg, uint32_t len);
+
+	/// <summary>
+	/// 쓰레드들에게 종료 메시지를 보낸다.
+	/// </summary>
 	void PostTerminateMsg()
 	{
 		PostQueuedCompletionStatus(iocp_, 0, NULL, NULL);
 	}
 
+	/// <summary>
+	/// 로직 단에서 정의한 Accept 시의 콜백 함수를 세팅한다.
+	/// </summary>
 	void SetOnAccept(std::function<void(Session*)> on_accept)
 	{
 		OnAccept = on_accept;
 	}
 
+	/// <summary>
+	/// 로직 단에서 정의한 Recv 시의 콜백 함수를 세팅한다.
+	/// </summary>
 	void SetOnRecv(std::function<void(Session*, DWORD)> on_recv)
 	{
 		OnRecv = on_recv;
 	}
 
+	/// <summary>
+	/// 로직 단에서 정의한 Disconnect 시의 콜백 함수를 세팅한다.
+	/// </summary>
 	void SetOnDisconnect(std::function<void(Session*)> on_disconnect)
 	{
 		OnDisconnect = on_disconnect;
+	}
+
+	/// <summary>
+	/// 세션 인덱스로 세션 포인터를 반환한다.
+	/// </summary>
+	Session* GetSessionByIdx(int32_t session_idx)
+	{
+		return session_list_[session_idx];
 	}
 
 private:
 	void CreateSessionPool(const int32_t max_session_cnt, const int32_t session_buf_size);
 	bool CreateWorkerThread();
 	bool CreateAccepterThread();
+	bool CreateSenderThread();
 
 	Session* GetEmptySession();
 	bool BindIOCompletionPort(Session* p_session);
@@ -55,6 +76,7 @@ private:
 
 	void WorkerThread();
 	void AccepterThread();
+	void SenderThread();
 
 	void CloseSocket(Session* p_session, bool is_force = false);
 	void ClearSession(Session* p_session);
@@ -64,6 +86,7 @@ private:
 
 	bool DestroyWorkerThread();
 	bool DestroyAccepterThread();
+	bool DestroySenderThread();
 
 	/// <summary>
 	/// 쓰레드 종료 처리 메시지인지 확인한다.
@@ -98,19 +121,24 @@ private:
 		return std::thread::hardware_concurrency() * 2 + 1;
 	}
 
+	/// <summary>
+	/// 연결 유지가 허용되는 에러 코드인지 검사한다.
+	/// </summary>
 	bool AcceptableErrorCode(int32_t errorCode)
 	{
 		return errorCode == ERROR_IO_PENDING || errorCode == WSAENOTSOCK;
 	}
 
-	std::vector<Session>		session_list_;
+	std::vector<Session*>		session_list_;
 	SOCKET						listen_socket_ = INVALID_SOCKET;
 	uint32_t					session_cnt_ = 0;
 	std::vector<std::thread>	worker_thread_list_;
 	std::thread					accepter_thread_;
+	std::thread					sender_thread_;
 	HANDLE						iocp_ = INVALID_HANDLE_VALUE;
 	bool						is_worker_running_ = true;
 	bool						is_accepter_running_ = true;
+	bool						is_sender_running_ = true;	
 
 	std::function<void(Session*)>			OnAccept = NULL;
 	std::function<void(Session*, DWORD)>	OnRecv = NULL;

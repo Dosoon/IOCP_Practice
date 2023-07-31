@@ -74,7 +74,7 @@ void EchoServer::OnRecv(Session* p_session, DWORD io_size)
 	p_session->recv_buf_[io_size] = '\0';
 	std::cout << "[OnRecvMsg] " << p_session->recv_buf_ << "\n";
 
-	// 받은 메시지를 그대로 재전송한다.
+	// 패킷 처리 스레드로 전달
 	EnqueuePacket(p_session->index_, io_size, p_session->recv_buf_);
 }
 
@@ -162,9 +162,10 @@ void EchoServer::PacketProcessThread()
 		if (packet.data_size == 0) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
-		// 에코 서버 로직 : 그대로 재전송
+		// 에코 서버 로직 : 세션 Send 링 버퍼에 데이터 Enqueue
 		else {
-			network_.SendMsg(packet.session_index_, packet.data, packet.data_size);
+			auto session = network_.GetSessionByIdx(packet.session_index_);
+			session->EnqueueSendData(packet.data, packet.data_size);
 
 			// 패킷 데이터 삭제
 			delete[] packet.data;
@@ -177,11 +178,14 @@ void EchoServer::PacketProcessThread()
 /// </summary>
 void EchoServer::EnqueuePacket(int32_t session_index, int32_t len, char* data_src)
 {
+	// 패킷 덱에 락 걸기
 	std::lock_guard<std::mutex> lock(packet_deque_lock_);
 	
+	// 패킷 데이터(에코 메시지)를 저장할 새로운 메모리 할당
 	auto packet_data = new char[len];
 	CopyMemory(packet_data, data_src, len);
 
+	// 패킷 덱에 패킷 추가
 	packet_deque_.emplace_back(session_index, len, packet_data);
 }
 
@@ -190,11 +194,14 @@ void EchoServer::EnqueuePacket(int32_t session_index, int32_t len, char* data_sr
 /// </summary>
 Packet EchoServer::DequePacket()
 {
+	// 패킷 덱에 락 걸기
 	std::lock_guard<std::mutex> lock(packet_deque_lock_);
 
+	// 덱이 비어있다면, 빈 패킷을 리턴해 Sleep 유도
 	if (packet_deque_.empty()) {
 		return Packet();
 	}
+	// 패킷이 있다면, 맨 앞의 것을 리턴
 	else {
 		auto packet = packet_deque_.front();
 		packet_deque_.pop_front();
