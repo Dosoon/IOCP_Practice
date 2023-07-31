@@ -1,6 +1,6 @@
 #include "ring_buffer.h"
 
-#define DEFAULT_BUFFER_SIZE 100
+#define DEFAULT_BUFFER_SIZE 15000
 
 RingBuffer::RingBuffer()
 {
