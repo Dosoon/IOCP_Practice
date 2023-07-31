@@ -20,4 +20,8 @@ struct OverlappedEx
 		ZeroMemory(&wsa_overlapped_, sizeof(WSAOVERLAPPED));
 		socket_ = INVALID_SOCKET;
 	}
+
+	~OverlappedEx() {
+		delete[] wsa_buf_.buf;
+	}
 };

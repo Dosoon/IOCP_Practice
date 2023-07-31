@@ -8,31 +8,15 @@
 /// </summary>
 bool Session::BindSend()
 {
-	// CAS 연산을 통해 이미 Send요청이 갔는지 확인하고, Send 요청이 시작됐음을 Flag 변수로 남김
-	bool sending_expected = false;
-	if (!is_sending_.compare_exchange_strong(sending_expected, true)) {
-		return true;
-	}
-
-	// Send 링버퍼 락 걸기
-	std::lock_guard<std::mutex> lock(send_lock_);
-
 	DWORD sent_bytes = 0;
 
-	// 소켓, 버퍼 정보 및 I/O Operation 타입 설정
-	auto send_overlapped_ex = new OverlappedEx();
-	send_overlapped_ex->socket_ = socket_;
-	send_overlapped_ex->op_type_ = IOOperation::kSEND;
-
-	// WSABUF 설정 : Send 링버퍼에 맞게 설정
-	WSABUF wsa_buf[2];
-	int32_t buffer_cnt = 1;
-	SetWsaBuf(wsa_buf, buffer_cnt);
+	// 큐의 front에 있는 OverlappedEx 로드
+	auto send_overlapped_ex = send_data_queue_.front();
 
 	// Send 요청
 	auto send_ret = WSASend(socket_,
-							wsa_buf,
-							buffer_cnt, &sent_bytes, 0,
+							&send_overlapped_ex->wsa_buf_,
+							1, &sent_bytes, 0,
 							reinterpret_cast<LPWSAOVERLAPPED>(send_overlapped_ex),
 							NULL);
 
@@ -46,47 +30,31 @@ bool Session::BindSend()
 		}
 	}
 
-	// Send 요청 완료된 만큼 링버퍼에서 데이터 제거
-	send_buf_.MoveFront(sent_bytes);
-
 	return true;
 }
 
 /// <summary>
-/// Send 링 버퍼에 있는 데이터 크기에 따라 WSABUF를 설정한다.
+/// 락을 걸고 세션의 Send 데이터 큐에 데이터를 넣는다.
 /// </summary>
-void Session::SetWsaBuf(WSABUF* wsa_buf, int32_t& buffer_cnt)
+void Session::EnqueueSendData(char* data, int32_t len)
 {
-	wsa_buf[0].buf = send_buf_.GetFrontBufferPtr();
-	wsa_buf[0].len = send_buf_.GetContinuousDequeueSize();
+	// Send 데이터 큐에 락 걸기
+	std::lock_guard<std::mutex> lock(send_queue_lock_);
 
-	if (send_buf_.GetSizeInUse() > send_buf_.GetContinuousDequeueSize()) {
-		wsa_buf[1].buf = send_buf_.GetBufferPtr();
-		wsa_buf[1].len = send_buf_.GetSizeInUse() - send_buf_.GetContinuousDequeueSize();
-		++buffer_cnt;
+	// OverlappedEx 할당 및 Operation Type, 소켓 설정
+	OverlappedEx* send_overlapped_ex = new OverlappedEx();
+	send_overlapped_ex->op_type_ = IOOperation::kSEND;
+	send_overlapped_ex->socket_ = socket_;
+
+	// OverlappedEx 내부 WSABUF에 에코 데이터 할당
+	send_overlapped_ex->wsa_buf_.buf = new char[len];
+	send_overlapped_ex->wsa_buf_.len = len;
+	CopyMemory(send_overlapped_ex->wsa_buf_.buf, data, len);
+
+	// OverlappedEx 데이터를 Send 큐에 Enqueue
+	send_data_queue_.push(send_overlapped_ex);
+
+	if (send_data_queue_.size() == 1) {
+		BindSend();
 	}
-}
-
-/// <summary>
-/// 락을 걸고 세션의 Send 링 버퍼에 데이터를 넣는다.
-/// </summary>
-int32_t Session::EnqueueSendData(char* data, int32_t len)
-{
-	// Send 링버퍼 락 걸기
-	std::lock_guard<std::mutex> lock(send_lock_);
-
-	// Enqueue에 성공한 크기를 리턴
-	return send_buf_.Enqueue(data, len);
-}
-
-/// <summary>
-/// Send 링 버퍼에 보낼 데이터가 있는지 여부를 반환한다.
-/// </summary>
-bool Session::HasSendData()
-{
-	// Send 링버퍼 락 걸기
-	std::lock_guard<std::mutex> lock(send_lock_);
-
-	// Send 링버퍼에 데이터가 있는지 확인
-	return send_buf_.GetSizeInUse() > 0;
 }

@@ -162,7 +162,7 @@ void EchoServer::PacketProcessThread()
 		if (packet.data_size == 0) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
-		// 에코 서버 로직 : 세션 Send 링 버퍼에 데이터 Enqueue
+		// 에코 서버 로직 : 세션 Send 큐 데이터에 Enqueue
 		else {
 			auto session = network_.GetSessionByIdx(packet.session_index_);
 			session->EnqueueSendData(packet.data, packet.data_size);

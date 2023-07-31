@@ -113,14 +113,6 @@ bool Network::CreateThread()
 		return false;
 	}
 
-	// Sender 스레드 생성
-	auto create_sender_ret = CreateSenderThread();
-	if (!create_sender_ret)
-	{
-		std::cout << "[CreateSenderThread] Failed\n";
-		return false;
-	}
-
 	return true;
 }
 
@@ -150,10 +142,6 @@ void Network::DestroyThread()
 
 	if (DestroyAccepterThread()) {
 		std::cout << "[DestroyThread] Accepter Thread Destroyed\n";
-	}
-
-	if (DestroySenderThread()) {
-		std::cout << "[DestroyThread] Sender Thread Destroyed\n";
 	}
 }
 
@@ -186,21 +174,6 @@ bool Network::DestroyAccepterThread()
 
 	if (accepter_thread_.joinable()) {
 		accepter_thread_.join();
-	}
-
-	return true;
-}
-
-/// <summary>
-/// Sender 쓰레드를 종료시킨다.
-/// </summary>
-bool Network::DestroySenderThread()
-{
-	// Sender 쓰레드 종료
-	is_sender_running_ = false;
-	
-	if (sender_thread_.joinable()) {
-		sender_thread_.join();
 	}
 
 	return true;
@@ -255,27 +228,16 @@ bool Network::CreateAccepterThread()
 }
 
 /// <summary>
-/// SenderThread를 생성한다.
-/// </summary>
-bool Network::CreateSenderThread()
-{
-	sender_thread_ = std::thread([this]() { SenderThread(); });
-
-	std::cout << "[CreateSenderThread] OK\n";
-	return true;
-}
-
-/// <summary>
 /// Session 풀에서 미사용 Session 구조체를 반환한다.
 /// </summary>
 Session* Network::GetEmptySession()
 {
 	for (auto& session : session_list_)
 	{
-		// CAS 연산을 통해 세션 활성화 여부를 확인하고, 사용되고 있음을 Flag 변수로 남김
+		// CAS 연산을 통해 세션 활성화 여부를 확인하고,
+		// 사용할 수 있다면 true로 변경해 다른 스레드의 접근을 막음
 		bool activated_expected = false;
-		if (session->is_activated_
-					 .compare_exchange_strong(activated_expected, true)) {
+		if (session->is_activated_.compare_exchange_strong(activated_expected, true)) {
 			return session;
 		}
 	}
@@ -430,15 +392,20 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 
 	// Send 완료 통지
 	if (p_overlapped_ex->op_type_ == IOOperation::kSEND) {
+		std::lock_guard<std::mutex> lock(p_session->send_queue_lock_);
 
 		// Send 완료
 		std::cout << "[WorkerThread] Send Completion : " << io_size << " Bytes\n";
 
-		// OverlappedEx 삭제
-		delete p_overlapped_ex;
+		// OverlappedEx pop() 후 할당 해제
+		auto send_overlapped_ex = p_session->send_data_queue_.front();
+		p_session->send_data_queue_.pop();
+		delete send_overlapped_ex;
 
-		// Send 사용 여부 해제
-		p_session->is_sending_.store(0);
+		// Send Data Queue에 보낼 데이터가 더 있다면, 다음 Send 요청
+		if (!p_session->send_data_queue_.empty()) {
+			p_session->BindSend();
+		}
 
 		return;
 	}
@@ -503,29 +470,6 @@ void Network::AccepterThread()
 	}
 }
 
-/// <summary>
-/// 세션의 Send 작업을 수행하는 Sender 쓰레드
-/// </summary>
-void Network::SenderThread()
-{
-	while (is_sender_running_)
-	{
-		for (auto& session : session_list_)
-		{
-			// 보낼 데이터가 없다면 패스
-			if (!session->HasSendData()) {
-				continue;
-			}
-			// Send 요청, 실패시 연결 종료
-			else {
-				if (!session->BindSend()) {
-					CloseSocket(session);
-				}
-			}
-		}
-	}
-}
-
 /// <summary> <para>
 /// 소켓 연결을 종료시킨다. </para><para>
 /// is_force가 true라면 RST 처리한다. </para>
@@ -574,9 +518,13 @@ void Network::ClearSession(Session* p_session)
 	// Session 구조체 초기화
 	ZeroMemory(&p_session->recv_overlapped_ex_, sizeof(OverlappedEx));
 
-	// Send 링 버퍼 초기화
-	p_session->send_buf_.ClearBuffer();
+	// Send Data Queue 초기화를 위한 락
+	std::lock_guard<std::mutex> lock(p_session->send_queue_lock_);
 
-	// Send 사용 여부 초기화
-	p_session->is_sending_ = false;
+	// 전부 delete한 후 pop해줌
+	while (!p_session->send_data_queue_.empty()) {
+		auto send_overlapped_ex = p_session->send_data_queue_.front();
+		p_session->send_data_queue_.pop();
+		delete send_overlapped_ex;
+	}
 }
