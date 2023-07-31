@@ -1,10 +1,9 @@
 #pragma once
-#include "network.h"
-
 #include <deque>
 #include <mutex>
 
 #include "packet.h"
+#include "network.h"
 
 class EchoServer
 {

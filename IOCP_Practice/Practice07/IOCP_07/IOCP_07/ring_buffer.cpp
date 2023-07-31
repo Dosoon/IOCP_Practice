@@ -123,12 +123,7 @@ void RingBuffer::MoveRear(int32_t size)
 
 void RingBuffer::MoveFront(int32_t size)
 {
-	int32_t* p = nullptr;
-	if (front_ < 0)
-		*p = 1;
 	front_ = (front_ + size) % size_;
-	if (front_ < 0)
-		*p = 1;
 }
 
 char* RingBuffer::GetBufferPtr()

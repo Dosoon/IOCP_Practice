@@ -1,12 +1,12 @@
 #pragma once
-#pragma comment(lib, "ws2_32")
-#include <WinSock2.h>
-#include <WS2tcpip.h>
 
 #include <thread>
 #include <vector>
 #include <functional>
+
 #include "session.h"
+
+#define SESSION_REUSE_TIME 5
 
 class Network
 {
@@ -101,7 +101,8 @@ private:
 	/// </summary>
 	bool SessionExited(bool gqcs_ret, DWORD io_size, LPOVERLAPPED p_overlapped)
 	{
-		return (gqcs_ret == false || (p_overlapped != NULL && io_size == 0));
+		return (gqcs_ret == false || (p_overlapped != NULL && io_size == 0 &&
+									  reinterpret_cast<OverlappedEx*>(p_overlapped)->op_type_ != IOOperation::kACCEPT));
 	}
 
 	/// <summary>

@@ -13,6 +13,7 @@ enum class IOOperation
 struct OverlappedEx
 {
 	WSAOVERLAPPED	wsa_overlapped_;			// Overlapped I/O 구조체
+	int32_t			session_idx_;				// 세션 인덱스
 	SOCKET			socket_;					// 클라이언트 소켓
 	WSABUF			wsa_buf_;					// Overlapped I/O 작업 버퍼
 	IOOperation		op_type_;					// Overlapped I/O 작업 타입

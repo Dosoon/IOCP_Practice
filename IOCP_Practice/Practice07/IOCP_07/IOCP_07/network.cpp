@@ -63,6 +63,13 @@ bool Network::BindAndListen(const uint16_t port, int32_t backlog_queue_size)
 		return false;
 	}
 
+	// IOCP에 바인드
+	auto iocp_ret = CreateIoCompletionPort(reinterpret_cast<HANDLE>(listen_socket_), iocp_, 0, 0);
+	if (iocp_ret == NULL || iocp_ret != iocp_) {
+		std::cout << "[CreateIoCompletionPort] Failed to Bind ListenSocket into IOCP\n";
+		return false;
+	}
+
 	std::cout << "[Listen] OK\n";
 
 	return true;
@@ -439,64 +446,60 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 
 		return;
 	}
+
+	// Accept 완료 통지
+	if (p_overlapped_ex->op_type_ == IOOperation::kACCEPT) {
+		auto p_session = GetSessionByIdx(p_overlapped_ex->session_idx_);
+
+		// IOCP에 바인드
+		if (BindIOCompletionPort(p_session)) {
+			++session_cnt_;
+
+			// 세션 활성화
+			p_session->is_activated_.store(true);
+
+			// Recv 바인드
+			if (!BindRecv(p_session)) {
+				CloseSocket(p_session);
+			}
+
+			OnAccept(p_session);
+		}
+		else {
+			CloseSocket(p_session);
+		}
+	}
 }
 
 /// <summary>
-/// 동기 Accept 작업을 처리하는 Accepter 쓰레드
+/// 비동기 Accept 작업을 처리하는 Accepter 쓰레드
 /// </summary>
 void Network::AccepterThread()
 {
 	while (is_accepter_running_)
 	{
-		// accept될 소켓 데이터를 담을 구조체 세팅
-		SOCKADDR_IN accepted_addr;
-		int32_t accepted_addr_len = sizeof(accepted_addr);
+		auto cur_time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 
-		// Max Session Count에 달하지 않았다면, Session 풀에서 하나를 가져옴
-		Session* p_accepted_session = GetEmptySession();
-		if (p_accepted_session == NULL) {
-			std::cout << "[AccepterThread] Current Session Count is MAX\n";
-			return;
-		}
-
-		// Accept
-		SOCKET accepted_socket = accept(listen_socket_,
-										reinterpret_cast<SOCKADDR*>(&accepted_addr),
-										&accepted_addr_len);
-
-		// 에러 처리
-		if (accepted_socket == INVALID_SOCKET) {
-			auto err = WSAGetLastError();
-
-			// 종료 메시지가 발생하여 listen_socket이 close된 경우
-			if (err == WSAEINTR) {
-				std::cout << "[AccepterThread] Accept Interrupted\n";
-				return;
+		for (auto& session : session_list_)
+		{
+			// 이미 사용 중인 세션
+			if (session->is_activated_.load()) {
+				continue;
 			}
 
-			std::cout << "[AccepterThread] Failed With Error Code : " << WSAGetLastError() << '\n';
-			continue;
+			// 사용 가능한 시간인지 확인
+			if (static_cast<unsigned long long>(cur_time) < session->latest_conn_closed_) {
+				continue;
+			}
+
+			auto diff = cur_time - session->latest_conn_closed_;
+			if (diff <= SESSION_REUSE_TIME) {
+				continue;
+			}
+
+			session->BindAccept(listen_socket_);
 		}
-
-		p_accepted_session->socket_ = accepted_socket;
-		std::cout << "[AccepterThread] New Session Accepted\n";
-
-		// 완료 통지 포트에 바인드
-		if (!BindIOCompletionPort(p_accepted_session))
-		{
-			return;
-		}
-
-		// Recv 요청
-		if (!BindRecv(p_accepted_session))
-		{
-			return;
-		}
-
-		// Accept 직후 로직 수행
-		OnAccept(p_accepted_session);
-
-		++session_cnt_;
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
 	}
 }
 
@@ -576,4 +579,7 @@ void Network::ClearSession(Session* p_session)
 
 	// Send 사용 여부 초기화
 	p_session->is_sending_ = false;
+
+	// 마지막 연결 시각 갱신
+	p_session->latest_conn_closed_ = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }

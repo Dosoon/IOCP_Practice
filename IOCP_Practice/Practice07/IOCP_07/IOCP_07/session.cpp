@@ -2,6 +2,44 @@
 
 #include <iostream>
 
+/// <summary>
+/// AcceptEx 비동기 요청
+/// </summary>
+bool Session::BindAccept(SOCKET listen_socket)
+{
+	// 중복 요청 방지를 위한 time값 조정
+	latest_conn_closed_ = UINT64_MAX;
+
+	// 소켓 생성
+	socket_ = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_IP, NULL, 0, WSA_FLAG_OVERLAPPED);
+	if (socket_ == INVALID_SOCKET) {
+		return false;
+	}
+
+	// Accept OverlappedEx 초기화
+	ZeroMemory(&accept_overlapped_ex_, sizeof(OverlappedEx));
+	accept_overlapped_ex_.session_idx_ = index_;
+	accept_overlapped_ex_.socket_ = socket_;
+	accept_overlapped_ex_.wsa_buf_.buf = NULL;
+	accept_overlapped_ex_.wsa_buf_.len = 0;
+	accept_overlapped_ex_.op_type_ = IOOperation::kACCEPT;
+
+	// AcceptEx
+	DWORD bytes_recv = 0;
+	auto accept_ret = AcceptEx(listen_socket, socket_, accept_buf_, 0, sizeof(SOCKADDR_IN) + 16,
+			 sizeof(SOCKADDR_IN) + 16, &bytes_recv, reinterpret_cast<LPOVERLAPPED>(&accept_overlapped_ex_));
+	if (accept_ret == false) {
+		auto err = WSAGetLastError();
+		
+		if (err != WSA_IO_PENDING) {
+			std::cout << "[BindAccept] Failed With Error Code : " << err << '\n';
+			return false;
+		}
+	}
+
+	return true;
+}
+
 /// <summary> <para>
 /// WSASend를 Call하여 비동기 Send 요청 </para> <para>
 /// WSASend가 실패했을 때에 false를 리턴한다. </para>

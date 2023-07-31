@@ -25,13 +25,13 @@ bool EchoServer::Start(int32_t max_session_cnt, int32_t session_buf_size)
 		return false;
 	}
 
-	if (!network_.BindAndListen(7777)) {
-		std::cout << "[StartServer] Failed to Bind And Listen\n";
+	if (!network_.StartNetwork(max_session_cnt, session_buf_size)) {
+		std::cout << "[StartServer] Failed to Start\n";
 		return false;
 	}
 
-	if (!network_.StartNetwork(max_session_cnt, session_buf_size)) {
-		std::cout << "[StartServer] Failed to Start\n";
+	if (!network_.BindAndListen(7777)) {
+		std::cout << "[StartServer] Failed to Bind And Listen\n";
 		return false;
 	}
 
@@ -100,21 +100,18 @@ void EchoServer::OnDisconnect(Session* p_session)
 bool EchoServer::GetSessionIpPort(Session* p_session, char* ip_dest, int32_t ip_len, uint16_t& port_dest)
 {
 	// Peer 정보 가져오기
-	SOCKADDR_IN session_addr;
+	SOCKADDR_IN* local_addr = NULL, *session_addr = NULL;
 	int32_t session_addr_len = sizeof(session_addr);
 	
-	int32_t peerResult = getpeername(p_session->socket_, (sockaddr*)&session_addr, &session_addr_len);
-	if (peerResult == SOCKET_ERROR)
-	{
-		std::cout << "[GetClientIpPort] Failed to Get Peer Name\n";
-		return false;
-	}
+	GetAcceptExSockaddrs(p_session->accept_buf_, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16,
+							reinterpret_cast<SOCKADDR**>(&local_addr), &session_addr_len,
+							reinterpret_cast<SOCKADDR**>(&session_addr), &session_addr_len);
 
 	// IP 주소 문자열로 변환
-	inet_ntop(AF_INET, &session_addr.sin_addr, ip_dest, ip_len);
+	inet_ntop(AF_INET, &session_addr->sin_addr, ip_dest, ip_len);
 
 	// 포트 정보
-	port_dest = session_addr.sin_port;
+	port_dest = session_addr->sin_port;
 
 	return true;
 }

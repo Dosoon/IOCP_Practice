@@ -1,4 +1,9 @@
 #pragma once
+#pragma comment(lib, "ws2_32")
+#pragma comment(lib, "mswsock")
+#include <WinSock2.h>
+#include <WS2tcpip.h>
+#include <MSWSock.h>
 
 #include <cstdint>
 #include <mutex>
@@ -26,12 +31,17 @@ public:
 		socket_ = INVALID_SOCKET;
 
 		recv_buf_ = new char[buf_size_];
+
+		accept_overlapped_ex_.session_idx_ = index;
+		recv_overlapped_ex_.session_idx_ = index;
+		send_overlapped_ex_.session_idx_ = index;
 	}
 
 	~Session() {
 		delete[] recv_buf_;
 	}
 
+	bool BindAccept(SOCKET listen_socket);
 	bool BindSend();
 	int32_t EnqueueSendData(char* data, int32_t data_len);
 	bool HasSendData();
@@ -57,4 +67,6 @@ public:
 	OverlappedEx		send_overlapped_ex_;			// Send I/O를 위한 OverlappedEx 구조체
 	std::atomic<bool>	is_sending_ = false;			// 현재 송신 중인지 여부
 	std::mutex			send_lock_;						// 송신 데이터에 대한 락
+	uint64_t			latest_conn_closed_ = 0;		// 가장 최근에 연결이 끊긴 시각
+	char				accept_buf_[64] = {0, };
 };
