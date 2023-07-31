@@ -126,7 +126,7 @@ private:
 	/// </summary>
 	bool AcceptableErrorCode(int32_t errorCode)
 	{
-		return errorCode == ERROR_IO_PENDING || errorCode == WSAENOTSOCK;
+		return errorCode == ERROR_IO_PENDING;
 	}
 
 	std::vector<Session*>		session_list_;

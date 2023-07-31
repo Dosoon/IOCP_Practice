@@ -40,7 +40,7 @@ public:
 	/// </summary>
 	bool AcceptableErrorCode(int32_t errorCode)
 	{
-		return errorCode == ERROR_IO_PENDING || errorCode == WSAENOTSOCK;
+		return errorCode == ERROR_IO_PENDING;
 	}
 
 	std::atomic<bool>	is_activated_ = false;			// 현재 세션이 사용중인지 여부
