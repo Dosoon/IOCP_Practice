@@ -434,9 +434,6 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 		// Send 완료
 		std::cout << "[WorkerThread] Send Completion : " << io_size << " Bytes\n";
 
-		// OverlappedEx 삭제
-		delete p_overlapped_ex;
-
 		// Send 사용 여부 해제
 		p_session->is_sending_.store(0);
 

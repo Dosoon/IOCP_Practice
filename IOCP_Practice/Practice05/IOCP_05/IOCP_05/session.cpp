@@ -20,9 +20,8 @@ bool Session::BindSend()
 	DWORD sent_bytes = 0;
 
 	// 소켓, 버퍼 정보 및 I/O Operation 타입 설정
-	auto send_overlapped_ex = new OverlappedEx();
-	send_overlapped_ex->socket_ = socket_;
-	send_overlapped_ex->op_type_ = IOOperation::kSEND;
+	send_overlapped_ex_.socket_ = socket_;
+	send_overlapped_ex_.op_type_ = IOOperation::kSEND;
 
 	// WSABUF 설정 : Send 링버퍼에 맞게 설정
 	WSABUF wsa_buf[2];
@@ -33,7 +32,7 @@ bool Session::BindSend()
 	auto send_ret = WSASend(socket_,
 							wsa_buf,
 							buffer_cnt, &sent_bytes, 0,
-							reinterpret_cast<LPWSAOVERLAPPED>(send_overlapped_ex),
+							reinterpret_cast<LPWSAOVERLAPPED>(&send_overlapped_ex_),
 							NULL);
 
 	// 에러 처리

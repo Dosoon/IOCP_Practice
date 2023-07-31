@@ -51,6 +51,7 @@ public:
 	char*				recv_buf_ = nullptr;			// 수신 데이터 버퍼
 	RingBuffer			send_buf_;						// 송신 데이터용 링 버퍼
 	OverlappedEx		recv_overlapped_ex_;			// Recv I/O를 위한 OverlappedEx 구조체
+	OverlappedEx		send_overlapped_ex_;			// Send I/O를 위한 OverlappedEx 구조체
 	std::atomic<bool>	is_sending_ = false;			// 현재 송신 중인지 여부
 	std::mutex			send_lock_;						// 송신 데이터에 대한 락
 };
