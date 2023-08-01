@@ -17,20 +17,8 @@ public:
 		WSACleanup();
 	}
 
-	bool InitSocket();
-	bool BindAndListen(const uint16_t port, const int32_t backlog_queue_size = 5);
-	bool CreateThread();
-	bool StartNetwork(const uint32_t max_session_cnt, const int32_t session_buf_size);
+	bool Start(uint16_t port, const uint32_t max_session_cnt, const int32_t session_buf_size);
 	void Terminate();
-	void DestroyThread();
-
-	/// <summary>
-	/// 쓰레드들에게 종료 메시지를 보낸다.
-	/// </summary>
-	void PostTerminateMsg()
-	{
-		PostQueuedCompletionStatus(iocp_, 0, NULL, NULL);
-	}
 
 	/// <summary>
 	/// 로직 단에서 정의한 Accept 시의 콜백 함수를 세팅한다.
@@ -65,14 +53,20 @@ public:
 	}
 
 private:
+	bool InitSocket();
+	bool BindAndListen(const uint16_t port, const int32_t backlog_queue_size = 5);
+	bool CreateThread();
+	bool CreateIOCP();
+	void DestroyThread();
+
 	void CreateSessionPool(const int32_t max_session_cnt, const int32_t session_buf_size);
 	bool CreateWorkerThread();
 	bool CreateAccepterThread();
 	bool CreateSenderThread();
 
-	Session* GetEmptySession();
 	bool BindIOCompletionPort(Session* p_session);
 	bool BindRecv(Session* p_session);
+	void SetRecvOverlappedEx(Session* p_session);
 
 	void WorkerThread();
 	void AccepterThread();
@@ -88,6 +82,18 @@ private:
 	bool DestroyAccepterThread();
 	bool DestroySenderThread();
 
+	bool ErrorHandler(bool result, int32_t error_code, const char* method, int32_t allow_codes, ...);
+	bool ErrorHandler(int32_t socket_result, int32_t error_code, const char* method, int32_t allow_codes, ...);
+	bool ErrorHandler(HANDLE handle_result, int32_t error_code, const char* method, HANDLE allow_handle);
+
+	/// <summary>
+	/// 쓰레드들에게 종료 메시지를 보낸다.
+	/// </summary>
+	void PostTerminateMsg()
+	{
+		PostQueuedCompletionStatus(iocp_, 0, NULL, NULL);
+	}
+
 	/// <summary>
 	/// 쓰레드 종료 처리 메시지인지 확인한다.
 	/// </summary>
@@ -101,16 +107,10 @@ private:
 	/// </summary>
 	bool SessionExited(bool gqcs_ret, DWORD io_size, LPOVERLAPPED p_overlapped)
 	{
-		return (gqcs_ret == false || (p_overlapped != NULL && io_size == 0 &&
-									  reinterpret_cast<OverlappedEx*>(p_overlapped)->op_type_ != IOOperation::kACCEPT));
-	}
-
-	/// <summary>
-	/// 소켓 디스크립터를 IOCP에 바인딩한 결과가 성공인지 여부를 반환한다.
-	/// </summary>
-	bool CheckIOCPBindResult(HANDLE handle)
-	{
-		return (handle != NULL && handle == iocp_);
+		// GQCS false -> 클라이언트 비정상 종료(graceful shutdown이 아닌 경우) 혹은 GQCS 타임아웃
+		// GQCS true, IO Size 0 -> graceful shutdown
+		return (gqcs_ret == false ||
+			(p_overlapped != NULL && io_size == 0 && reinterpret_cast<OverlappedEx*>(p_overlapped)->op_type_ != IOOperation::kACCEPT));
 	}
 
 	/// <summary> <para>

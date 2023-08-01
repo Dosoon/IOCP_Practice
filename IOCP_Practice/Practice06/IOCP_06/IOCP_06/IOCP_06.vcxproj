@@ -132,7 +132,6 @@
     <ClCompile Include="echo_server.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="network.cpp" />
-    <ClCompile Include="ring_buffer.cpp" />
     <ClCompile Include="session.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -140,7 +139,6 @@
     <ClInclude Include="network.h" />
     <ClInclude Include="overlapped_ex_define.h" />
     <ClInclude Include="packet.h" />
-    <ClInclude Include="ring_buffer.h" />
     <ClInclude Include="session.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

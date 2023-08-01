@@ -8,7 +8,7 @@
 class EchoServer
 {
 public:
-	bool Start(int32_t max_client_count, int32_t session_buf_size);
+	bool Start(uint16_t port, int32_t max_client_count, int32_t session_buf_size);
 	void Terminate();
 	bool IsServerRunning()
 	{

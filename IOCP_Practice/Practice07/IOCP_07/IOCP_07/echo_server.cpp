@@ -7,10 +7,11 @@
 /// 정의해둔 콜백함수를 네트워크 클래스에 세팅하고, </para> <para>
 /// 로직 스레드 생성 후 네트워크를 시작한다. </para>
 /// </summary>
-bool EchoServer::Start(int32_t max_session_cnt, int32_t session_buf_size)
+bool EchoServer::Start(uint16_t port, int32_t max_session_cnt, int32_t session_buf_size)
 {
 	is_server_running_ = true;
 
+	// 네트워크에서 Accept, Recv, Disconnect 발생 시 에코 서버에서 수행할 콜백함수 로직 세팅
 	network_.SetOnAccept(std::bind(&EchoServer::OnAccept, this, std::placeholders::_1));
 	network_.SetOnRecv(std::bind(&EchoServer::OnRecv, this, std::placeholders::_1, std::placeholders::_2));
 	network_.SetOnDisconnect(std::bind(&EchoServer::OnDisconnect, this, std::placeholders::_1));
@@ -20,22 +21,12 @@ bool EchoServer::Start(int32_t max_session_cnt, int32_t session_buf_size)
 		return false;
 	}
 
-	if (!network_.InitSocket()) {
-		std::cout << "[StartServer] Failed to Initialize\n";
-		return false;
-	}
-
-	if (!network_.StartNetwork(max_session_cnt, session_buf_size)) {
+	if (!network_.Start(port, max_session_cnt, session_buf_size)) {
 		std::cout << "[StartServer] Failed to Start\n";
 		return false;
 	}
 
-	if (!network_.BindAndListen(7777)) {
-		std::cout << "[StartServer] Failed to Bind And Listen\n";
-		return false;
-	}
-
-	std::cout << "[StartServer] Successed to Start Server\n";
+	std::cout << "[StartServer] Server Started\n";
 	return true;
 }
 
@@ -104,8 +95,8 @@ bool EchoServer::GetSessionIpPort(Session* p_session, char* ip_dest, int32_t ip_
 	int32_t session_addr_len = sizeof(session_addr);
 	
 	GetAcceptExSockaddrs(p_session->accept_buf_, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16,
-							reinterpret_cast<SOCKADDR**>(&local_addr), &session_addr_len,
-							reinterpret_cast<SOCKADDR**>(&session_addr), &session_addr_len);
+						reinterpret_cast<SOCKADDR**>(&local_addr), &session_addr_len,
+						reinterpret_cast<SOCKADDR**>(&session_addr), &session_addr_len);
 
 	// IP 주소 문자열로 변환
 	inet_ntop(AF_INET, &session_addr->sin_addr, ip_dest, ip_len);
@@ -123,7 +114,6 @@ bool EchoServer::CreatePacketProcessThread()
 {
 	packet_process_thread_ = std::thread([this]() { PacketProcessThread(); });
 
-	std::cout << "[CreatePacketProcessThread] OK\n";
 	return true;
 }
 
@@ -139,7 +129,7 @@ bool EchoServer::DestroyPacketProcessThread()
 		packet_process_thread_.join();
 	}
 
-	std::cout << "[DestroyPacketProcessThread] OK\n";
+	std::cout << "[DestroyPacketProcessThread] Packet Process Thread Destroyed\n";
 	return true;
 }
 

@@ -24,9 +24,6 @@
     <ClCompile Include="network.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="ring_buffer.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="session.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -42,9 +39,6 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="packet.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="ring_buffer.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="session.h">

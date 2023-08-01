@@ -17,27 +17,27 @@ bool Session::BindAccept(SOCKET listen_socket)
 	}
 
 	// Accept OverlappedEx 초기화
+	InitAcceptOverlapped();
+
+	// AcceptEx
+	DWORD bytes_recv = 0;
+	auto accept_ret = AcceptEx(listen_socket, socket_, accept_buf_, 0, sizeof(SOCKADDR_IN) + 16,
+		sizeof(SOCKADDR_IN) + 16, &bytes_recv, reinterpret_cast<LPOVERLAPPED>(&accept_overlapped_ex_));
+
+	return ErrorHandler(accept_ret, WSAGetLastError(), "AcceptEx", 1, WSA_IO_PENDING);
+}
+
+/// <summary>
+/// Accept OverlappedEx 초기화
+/// </summary>
+void Session::InitAcceptOverlapped()
+{
 	ZeroMemory(&accept_overlapped_ex_, sizeof(OverlappedEx));
 	accept_overlapped_ex_.session_idx_ = index_;
 	accept_overlapped_ex_.socket_ = socket_;
 	accept_overlapped_ex_.wsa_buf_.buf = NULL;
 	accept_overlapped_ex_.wsa_buf_.len = 0;
 	accept_overlapped_ex_.op_type_ = IOOperation::kACCEPT;
-
-	// AcceptEx
-	DWORD bytes_recv = 0;
-	auto accept_ret = AcceptEx(listen_socket, socket_, accept_buf_, 0, sizeof(SOCKADDR_IN) + 16,
-			 sizeof(SOCKADDR_IN) + 16, &bytes_recv, reinterpret_cast<LPOVERLAPPED>(&accept_overlapped_ex_));
-	if (accept_ret == false) {
-		auto err = WSAGetLastError();
-		
-		if (err != WSA_IO_PENDING) {
-			std::cout << "[BindAccept] Failed With Error Code : " << err << '\n';
-			return false;
-		}
-	}
-
-	return true;
 }
 
 /// <summary> <para>
@@ -67,20 +67,12 @@ bool Session::BindSend()
 	SetWsaBuf(wsa_buf, buffer_cnt);
 
 	// Send 요청
-	auto send_ret = WSASend(socket_,
-							wsa_buf,
-							buffer_cnt, &sent_bytes, 0,
-							reinterpret_cast<LPWSAOVERLAPPED>(&send_overlapped_ex_),
-							NULL);
+	auto send_ret = WSASend(socket_, wsa_buf, buffer_cnt, &sent_bytes, 0,
+		reinterpret_cast<LPWSAOVERLAPPED>(&send_overlapped_ex_), NULL);
 
 	// 에러 처리
-	if (send_ret == SOCKET_ERROR) {
-		auto err = WSAGetLastError();
-
-		if (!AcceptableErrorCode(err)) {
-			std::cout << "[SendMsg] Failed With Error Code : " << err << '\n';
-			return false;
-		}
+	if (!ErrorHandler(send_ret, WSAGetLastError(), "WSASend", 1, ERROR_IO_PENDING)) {
+		return false;
 	}
 
 	// Send 요청 완료된 만큼 링버퍼에서 데이터 제거
@@ -101,6 +93,53 @@ void Session::SetWsaBuf(WSABUF* wsa_buf, int32_t& buffer_cnt)
 		wsa_buf[1].buf = send_buf_.GetBufferPtr();
 		wsa_buf[1].len = send_buf_.GetSizeInUse() - send_buf_.GetContinuousDequeueSize();
 		++buffer_cnt;
+	}
+}
+
+/// <summary> <para>
+/// 허용되는 에러 코드가 아니라면 로그를 남긴다. </para> <para>
+/// 로그를 남겼다면 false를 리턴한다. </para> <para>
+/// allow_codes의 첫 번째 인자는 허용되는 에러 코드의 개수이다. </para>
+/// </summary>
+bool Session::ErrorHandler(bool result, int32_t error_code, const char* method, int32_t allow_codes, ...)
+{
+	if (result) {
+		return true;
+	}
+	else {
+		va_list code_list;
+		va_start(code_list, allow_codes);
+
+		for (auto i = 0; i < allow_codes; ++i) {
+			if (error_code == va_arg(code_list, int32_t)) {
+				return true;
+			}
+		}
+
+		std::cout << '[' << method << "] Failed With Error Code : " << error_code << '\n';
+		va_end(code_list);
+		return false;
+	}
+}
+
+bool Session::ErrorHandler(int32_t socket_result, int32_t error_code, const char* method, int32_t allow_codes, ...)
+{
+	if (socket_result != SOCKET_ERROR) {
+		return true;
+	}
+	else {
+		va_list code_list;
+		va_start(code_list, allow_codes);
+
+		for (auto i = 0; i < allow_codes; ++i) {
+			if (error_code == va_arg(code_list, int32_t)) {
+				return true;
+			}
+		}
+
+		std::cout << '[' << method << "] Failed With Error Code : " << error_code << '\n';
+		va_end(code_list);
+		return true;
 	}
 }
 

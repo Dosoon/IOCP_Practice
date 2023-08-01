@@ -26,7 +26,6 @@ bool Network::InitSocket()
 		return false;
 	}
 
-	std::cout << "[InitSocket] OK\n";
 	return true;
 }
 
@@ -44,33 +43,59 @@ bool Network::BindAndListen(const uint16_t port, int32_t backlog_queue_size)
 
 	// 바인드
 	auto bind_ret = bind(listen_socket_, reinterpret_cast<SOCKADDR*>(&sockaddr), sizeof(sockaddr));
-	if (bind_ret == SOCKET_ERROR)
-	{
-		std::cout << "[Bind] Failed with Error Code : " << WSAGetLastError() << '\n';
+	if (!ErrorHandler(bind_ret, WSAGetLastError(), "Bind", 0)) {
 		return false;
 	}
-
-	std::cout << "[Bind] OK\n";
 
 	// 백로그 큐 사이즈 결정
 	backlog_queue_size = backlog_queue_size > SOMAXCONN ?
 						 SOMAXCONN_HINT(backlog_queue_size) : backlog_queue_size;
 
 	auto listen_ret = listen(listen_socket_, backlog_queue_size);
-	if (listen_ret == SOCKET_ERROR)
-	{
-		std::cout << "[Listen] Failed with Error Code : " << WSAGetLastError() << '\n';
+	if (!ErrorHandler(listen_ret, WSAGetLastError(), "Listen", 0)) {
 		return false;
 	}
 
 	// IOCP에 바인드
 	auto iocp_ret = CreateIoCompletionPort(reinterpret_cast<HANDLE>(listen_socket_), iocp_, 0, 0);
-	if (iocp_ret == NULL || iocp_ret != iocp_) {
-		std::cout << "[CreateIoCompletionPort] Failed to Bind ListenSocket into IOCP\n";
+	if (!ErrorHandler(iocp_ret, GetLastError(), "CreateIoCompletionPort", iocp_)) {
 		return false;
 	}
 
-	std::cout << "[Listen] OK\n";
+	return true;
+}
+
+/// <summary>
+/// 서버를 시작한다.
+/// </summary>
+bool Network::Start(uint16_t port, const uint32_t max_session_cnt, const int32_t session_buf_size)
+{
+	if (!InitSocket()) {
+		std::cout << "[Start] Failed to Initialize Socket\n";
+		return false;
+	}
+
+	// Session 풀 생성
+	CreateSessionPool(max_session_cnt, session_buf_size);
+
+	// IOCP 생성
+	if (!CreateIOCP()) {
+		std::cout << "[Start] Failed to Create IOCP\n";
+		return false;
+	}
+
+	// 워커 쓰레드 및 Accepter 쓰레드 생성
+	auto create_ret = CreateThread();
+	if (!create_ret) {
+		std::cout << "[Start] Failed to Create Threads\n";
+		return false;
+	}
+
+	// Bind & Listen
+	if (!BindAndListen(port)) {
+		std::cout << "[Start] Failed to Bind And Listen\n";
+		return false;
+	}
 
 	return true;
 }
@@ -78,21 +103,12 @@ bool Network::BindAndListen(const uint16_t port, int32_t backlog_queue_size)
 /// <summary>
 /// Session 풀 생성, IOCP 생성, 워커쓰레드 생성, Accepter 쓰레드 생성
 /// </summary>
-bool Network::StartNetwork(const uint32_t max_session_cnt, const int32_t session_buf_size)
+bool Network::CreateIOCP()
 {
-	// Session 풀 생성
-	CreateSessionPool(max_session_cnt, session_buf_size);
-
 	// IOCP 생성
 	iocp_ = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
 	if (iocp_ == NULL) {
 		std::cout << "[CreateIoCompletionPort] Failed with Error Code : " << GetLastError() << '\n';
-		return false;
-	}
-
-	// 워커 쓰레드 및 Accepter 쓰레드 생성
-	auto create_ret = CreateThread();
-	if (!create_ret) {
 		return false;
 	}
 
@@ -226,8 +242,6 @@ void Network::CreateSessionPool(const int32_t max_session_cnt, const int32_t ses
 	{
 		session_list_.emplace_back(new Session(i, session_buf_size));
 	}
-
-	std::cout << "[CreateSessionPool] OK\n";
 }
 
 /// <summary>
@@ -246,7 +260,6 @@ bool Network::CreateWorkerThread()
 		worker_thread_list_.emplace_back([this]() { WorkerThread(); });
 	}
 
-	std::cout << "[CreateWorkerThread] Created " << max_worker_thread << " Threads\n";
 	return true;
 }
 
@@ -257,7 +270,6 @@ bool Network::CreateAccepterThread()
 {
 	accepter_thread_ = std::thread([this]() { AccepterThread(); });
 
-	std::cout << "[CreateAccepterThread] OK\n";
 	return true;
 }
 
@@ -268,26 +280,7 @@ bool Network::CreateSenderThread()
 {
 	sender_thread_ = std::thread([this]() { SenderThread(); });
 
-	std::cout << "[CreateSenderThread] OK\n";
 	return true;
-}
-
-/// <summary>
-/// Session 풀에서 미사용 Session 구조체를 반환한다.
-/// </summary>
-Session* Network::GetEmptySession()
-{
-	for (auto& session : session_list_)
-	{
-		// CAS 연산을 통해 세션 활성화 여부를 확인하고, 사용되고 있음을 Flag 변수로 남김
-		bool activated_expected = false;
-		if (session->is_activated_
-					 .compare_exchange_strong(activated_expected, true)) {
-			return session;
-		}
-	}
-
-	return nullptr;
 }
 
 /// <summary>
@@ -300,8 +293,7 @@ bool Network::BindIOCompletionPort(Session* p_session)
 									     iocp_, reinterpret_cast<ULONG_PTR>(p_session), 0);
 
 	// 바인드 성공여부 확인
-	if (!CheckIOCPBindResult(handle)) {
-		std::cout << "[BindIOCompletionPort] Failed With Error Code : " << GetLastError() << '\n';
+	if (!ErrorHandler(handle, GetLastError(), "CreateIoCompletionPort", iocp_)) {
 		return false;
 	}
 
@@ -317,9 +309,7 @@ bool Network::BindRecv(Session* p_session)
 	DWORD recved_bytes = 0;
 
 	// 버퍼 정보 및 I/O Operation 타입 설정
-	p_session->recv_overlapped_ex_.wsa_buf_.len = p_session->buf_size_;
-	p_session->recv_overlapped_ex_.wsa_buf_.buf = p_session->recv_buf_;
-	p_session->recv_overlapped_ex_.op_type_ = IOOperation::kRECV;
+	SetRecvOverlappedEx(p_session);
 
 	// Recv 요청
 	auto recv_ret = WSARecv(p_session->socket_,
@@ -329,16 +319,22 @@ bool Network::BindRecv(Session* p_session)
 							NULL);
 
 	// 에러 처리
-	if (recv_ret == SOCKET_ERROR) {
-		auto err = WSAGetLastError();
-
-		if (err != ERROR_IO_PENDING) {
-			std::cout << "[BindRecv] Failed With Error Code : " << err << '\n';
-			return false;
-		}
+	if (!ErrorHandler(recv_ret, WSAGetLastError(), "WSARecv", 1, ERROR_IO_PENDING)) {
+		return false;
 	}
 
 	return true;
+}
+
+/// <summary>
+/// RecvOverlappedEx에 버퍼 정보 및 I/O Operation 타입을 설정한다.
+/// </summary>
+void Network::SetRecvOverlappedEx(Session* p_session)
+{
+	p_session->recv_overlapped_ex_.socket_ = p_session->socket_;
+	p_session->recv_overlapped_ex_.wsa_buf_.len = p_session->buf_size_;
+	p_session->recv_overlapped_ex_.wsa_buf_.buf = p_session->recv_buf_;
+	p_session->recv_overlapped_ex_.op_type_ = IOOperation::kRECV;
 }
 
 /// <summary>
@@ -361,14 +357,13 @@ void Network::WorkerThread()
 	while (is_worker_running_)
 	{
 		gqcs_ret = GetQueuedCompletionStatus(iocp_, &io_size,
-											 (PULONG_PTR)&p_session,
-											 &p_overlapped, INFINITE);
+			reinterpret_cast<PULONG_PTR>(&p_session), &p_overlapped, INFINITE);
 
 		// 쓰레드 종료 메시지인지 체크
  		if (TerminateMsg(gqcs_ret, io_size, p_overlapped)) {
 			std::cout << "[WorkerThread] Received Finish Message\n";
 
-			// 다른 쓰레드들도 종료될 수 있도록 메시지 전달
+			// 다른 쓰레드들도 종료될 수 있도록 메시지 전달 후, 이 스레드 종료
 			PostTerminateMsg();
 			return;
 		}
@@ -411,7 +406,7 @@ bool Network::CheckGQCSResult(Session* p_session, bool gqcs_ret, DWORD io_size, 
 }
 
 /// <summary>
-/// Overlapped의 I/O 타입에 따라 Recv 혹은 Send 완료 루틴을 수행한다.
+/// Overlapped의 I/O 타입에 따라 완료 루틴을 수행한다.
 /// </summary>
 void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED p_overlapped)
 {
@@ -449,10 +444,11 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 
 	// Accept 완료 통지
 	if (p_overlapped_ex->op_type_ == IOOperation::kACCEPT) {
-		auto p_session = GetSessionByIdx(p_overlapped_ex->session_idx_);
+		p_session = GetSessionByIdx(p_overlapped_ex->session_idx_);
 
 		// IOCP에 바인드
 		if (BindIOCompletionPort(p_session)) {
+			OnAccept(p_session);
 			++session_cnt_;
 
 			// 세션 활성화
@@ -463,7 +459,6 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 				CloseSocket(p_session);
 			}
 
-			OnAccept(p_session);
 		}
 		else {
 			CloseSocket(p_session);
@@ -497,9 +492,10 @@ void Network::AccepterThread()
 				continue;
 			}
 
+			// Accept 비동기 요청
 			session->BindAccept(listen_socket_);
 		}
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+		std::this_thread::sleep_for(std::chrono::milliseconds(64));
 	}
 }
 
@@ -532,15 +528,17 @@ void Network::SenderThread()
 /// </summary>
 void Network::CloseSocket(Session* p_session, bool is_force)
 {
-	// NULL 체크
 	if (p_session == NULL) {
 		return;
 	}
 
+	// 재사용을 잠시 방지하기 위해 MAX값 설정
+	p_session->latest_conn_closed_ = UINT64_MAX;
+
 	// CloseSocket 중복 호출 방지
 	bool activated_expected = true;
 	if (p_session->is_activated_
-				   .compare_exchange_strong(activated_expected, false) == false) {
+		.compare_exchange_strong(activated_expected, false) == false) {
 		return;
 	}
 
@@ -553,8 +551,8 @@ void Network::CloseSocket(Session* p_session, bool is_force)
 	}
 
 	// Linger 옵션 설정
-	setsockopt(p_session->socket_, SOL_SOCKET,
-			   SO_LINGER, reinterpret_cast<const char*>(&linger), sizeof(linger));
+	setsockopt(p_session->socket_, SOL_SOCKET, SO_LINGER,
+		reinterpret_cast<const char*>(&linger), sizeof(linger));
 
 	// 소켓 닫고, Session 초기화 후 풀에 반납
 	closesocket(p_session->socket_);
@@ -582,4 +580,62 @@ void Network::ClearSession(Session* p_session)
 
 	// 마지막 연결 시각 갱신
 	p_session->latest_conn_closed_ = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+/// <summary> <para>
+/// 허용되는 에러 코드가 아니라면 로그를 남긴다. </para> <para>
+/// 로그를 남겼다면 false를 리턴한다. </para> <para>
+/// allow_codes의 첫 번째 인자는 허용되는 에러 코드의 개수이다. </para>
+/// </summary>
+bool Network::ErrorHandler(bool result, int32_t error_code, const char* method, int32_t allow_codes, ...)
+{
+	if (result) {
+		return true;
+	}
+	else {
+		va_list code_list;
+		va_start(code_list, allow_codes);
+
+		for (auto i = 0; i < allow_codes; ++i) {
+			if (error_code == va_arg(code_list, int32_t)) {
+				return true;
+			}
+		}
+
+		std::cout << '[' << method << "] Failed With Error Code : " << error_code << '\n';
+		va_end(code_list);
+		return false;
+	}
+}
+
+bool Network::ErrorHandler(int32_t socket_result, int32_t error_code, const char* method, int32_t allow_codes, ...)
+{
+	if (socket_result != SOCKET_ERROR) {
+		return true;
+	}
+	else {
+		va_list code_list;
+		va_start(code_list, allow_codes);
+
+		for (auto i = 0; i < allow_codes; ++i) {
+			if (error_code == va_arg(code_list, int32_t)) {
+				return true;
+			}
+		}
+
+		std::cout << '[' << method << "] Failed With Error Code : " << error_code << '\n';
+		va_end(code_list);
+		return true;
+	}
+}
+
+bool Network::ErrorHandler(HANDLE handle_result, int32_t error_code, const char* method, HANDLE allow_handle)
+{
+	if (handle_result == allow_handle) {
+		return true;
+	}
+	else {
+		std::cout << '[' << method << "] Failed With Error Code : " << error_code << '\n';
+		return false;
+	}
 }
