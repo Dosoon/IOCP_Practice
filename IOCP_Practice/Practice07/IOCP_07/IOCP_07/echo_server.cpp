@@ -12,8 +12,8 @@ bool EchoServer::Start(uint16_t port, int32_t max_session_cnt, int32_t session_b
 	is_server_running_ = true;
 
 	// 네트워크에서 Accept, Recv, Disconnect 발생 시 에코 서버에서 수행할 콜백함수 로직 세팅
-	network_.SetOnAccept(std::bind(&EchoServer::OnAccept, this, std::placeholders::_1));
-	network_.SetOnRecv(std::bind(&EchoServer::OnRecv, this, std::placeholders::_1, std::placeholders::_2));
+	network_.SetOnConnect(std::bind(&EchoServer::OnConnect, this, std::placeholders::_1));
+	network_.SetOnRecv(std::bind(&EchoServer::OnRecv, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 	network_.SetOnDisconnect(std::bind(&EchoServer::OnDisconnect, this, std::placeholders::_1));
 
 	if (!CreatePacketProcessThread()) {
@@ -43,68 +43,47 @@ void EchoServer::Terminate()
 /// <summary>
 /// 네트워크 단에서 Accept시에 수행되는 콜백 함수이다.
 /// </summary>
-void EchoServer::OnAccept(Session* p_session)
+void EchoServer::OnConnect(int32_t session_idx)
 {
+	// 세션 데이터 불러오기
+	auto session = network_.GetSessionByIdx(session_idx);
+
+	// 세션 어드레스 불러오기
 	char ip[16];
 	uint16_t port;
+	session->GetSessionIpPort(ip, 16, port);
 
-	// IP 및 포트번호 가져오기
-	if (GetSessionIpPort(p_session, ip, sizeof(ip), port))
-	{
-		// 새로운 접속 로그 출력
-		std::cout << "[OnAccept] " << ip << ":" << port << " Entered" << "\n";
-	}
+	// 새로운 접속 로그 출력
+	std::cout << "[OnConnect] ID " << session_idx << " Entered (" << ip << ":" << port << ")\n";
+	
 }
 
 /// <summary>
 /// 네트워크 단에서 Recv시에 수행되는 콜백 함수이다.
 /// </summary>
-void EchoServer::OnRecv(Session* p_session, DWORD io_size)
+void EchoServer::OnRecv(int32_t session_idx, const char* p_data, DWORD len)
 {
-	// 디버깅용으로 받은 메시지 출력
-	p_session->recv_buf_[io_size] = '\0';
-	std::cout << "[OnRecvMsg] " << p_session->recv_buf_ << "\n";
+	std::cout << "[OnRecvMsg] " << std::string_view(p_data, len) << "\n";
 
 	// 패킷 처리 스레드로 전달
-	EnqueuePacket(p_session->index_, io_size, p_session->recv_buf_);
+	EnqueuePacket(session_idx, len, const_cast<char*>(p_data));
 }
 
 /// <summary>
 /// 네트워크 단에서 세션 Disconnect시에 수행되는 콜백 함수이다.
 /// </summary>
-void EchoServer::OnDisconnect(Session* p_session)
+void EchoServer::OnDisconnect(int32_t session_idx)
 {
+	// 세션 데이터 불러오기
+	auto session = network_.GetSessionByIdx(session_idx);
+
+	// 세션 어드레스 불러오기
 	char ip[16];
 	uint16_t port;
+	session->GetSessionIpPort(ip, 16, port);
 
-	// IP 및 포트번호 가져오기
-	if (GetSessionIpPort(p_session, ip, sizeof(ip), port))
-	{
-		// 접속 종료 로그 출력
-		std::cout << "[OnDisconnect] " << ip << ":" << port << " Leaved" << "\n";
-	}
-}
-
-/// <summary>
-/// 세션 데이터를 토대로 IP 주소와 포트 번호를 가져온다.
-/// </summary>
-bool EchoServer::GetSessionIpPort(Session* p_session, char* ip_dest, int32_t ip_len, uint16_t& port_dest)
-{
-	// Peer 정보 가져오기
-	SOCKADDR_IN* local_addr = NULL, *session_addr = NULL;
-	int32_t session_addr_len = sizeof(session_addr);
-	
-	GetAcceptExSockaddrs(p_session->accept_buf_, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16,
-						reinterpret_cast<SOCKADDR**>(&local_addr), &session_addr_len,
-						reinterpret_cast<SOCKADDR**>(&session_addr), &session_addr_len);
-
-	// IP 주소 문자열로 변환
-	inet_ntop(AF_INET, &session_addr->sin_addr, ip_dest, ip_len);
-
-	// 포트 정보
-	port_dest = session_addr->sin_port;
-
-	return true;
+	// 새로운 접속 로그 출력
+	std::cout << "[OnDisconnect] ID " << session_idx << " Leaved (" << ip << ":" << port << ")\n";
 }
 
 /// <summary>

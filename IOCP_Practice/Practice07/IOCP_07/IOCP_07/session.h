@@ -45,6 +45,7 @@ public:
 	void SetWsaBuf(WSABUF* wsa_buf, int32_t& buffer_cnt);
 	bool ErrorHandler(bool result, int32_t error_code, const char* method, int32_t allow_codes, ...);
 	bool ErrorHandler(int32_t socket_result, int32_t error_code, const char* method, int32_t allow_codes, ...);
+	bool GetSessionIpPort(char* ip_dest, int32_t ip_len, uint16_t& port_dest);
 
 	/// <summary>
 	/// 연결 유지가 허용되는 에러 코드인지 검사한다.

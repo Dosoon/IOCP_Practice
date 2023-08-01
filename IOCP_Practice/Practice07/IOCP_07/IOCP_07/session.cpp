@@ -166,3 +166,25 @@ bool Session::HasSendData()
 	// Send 링버퍼에 데이터가 있는지 확인
 	return send_buf_.GetSizeInUse() > 0;
 }
+
+/// <summary>
+/// 세션 데이터를 토대로 IP 주소와 포트 번호를 가져온다.
+/// </summary>
+bool Session::GetSessionIpPort(char* ip_dest, int32_t ip_len, uint16_t& port_dest)
+{
+	// Peer 정보 가져오기
+	SOCKADDR_IN* local_addr = NULL, * session_addr = NULL;
+	int32_t session_addr_len = sizeof(session_addr);
+
+	GetAcceptExSockaddrs(accept_buf_, 0, sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16,
+		reinterpret_cast<SOCKADDR**>(&local_addr), &session_addr_len,
+		reinterpret_cast<SOCKADDR**>(&session_addr), &session_addr_len);
+
+	// IP 주소 문자열로 변환
+	inet_ntop(AF_INET, &session_addr->sin_addr, ip_dest, ip_len);
+
+	// 포트 정보
+	port_dest = session_addr->sin_port;
+
+	return true;
+}

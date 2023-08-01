@@ -387,7 +387,7 @@ bool Network::CheckGQCSResult(Session* p_session, bool gqcs_ret, DWORD io_size, 
 	if (SessionExited(gqcs_ret, io_size, p_overlapped)) {
 
 		// 접속 종료 전에 수행되어야 할 로직
-		OnDisconnect(p_session);
+		OnDisconnect(p_session->index_);
 
 		// 소켓 닫고 Session 초기화
 		CloseSocket(p_session);
@@ -417,8 +417,7 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 	if (p_overlapped_ex->op_type_ == IOOperation::kRECV) {
 
 		// Recv 완료 후 다시 Recv 요청을 건다.
-		std::cout << "[WorkerThread] Recv Completion\n";
-		OnRecv(p_session, io_size);
+		OnRecv(p_session->index_, p_session->recv_buf_, io_size);
 
 		if (!BindRecv(p_session)) {
 
@@ -433,9 +432,6 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 	// Send 완료 통지
 	if (p_overlapped_ex->op_type_ == IOOperation::kSEND) {
 
-		// Send 완료
-		std::cout << "[WorkerThread] Send Completion : " << io_size << " Bytes\n";
-
 		// Send 사용 여부 해제
 		p_session->is_sending_.store(0);
 
@@ -448,8 +444,7 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 
 		// IOCP에 바인드
 		if (BindIOCompletionPort(p_session)) {
-			OnAccept(p_session);
-			++session_cnt_;
+			OnConnect(p_session->index_);
 
 			// 세션 활성화
 			p_session->is_activated_.store(true);
@@ -459,6 +454,7 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 				CloseSocket(p_session);
 			}
 
+			++session_cnt_;
 		}
 		else {
 			CloseSocket(p_session);

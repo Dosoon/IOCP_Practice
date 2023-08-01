@@ -23,15 +23,15 @@ public:
 	/// <summary>
 	/// 로직 단에서 정의한 Accept 시의 콜백 함수를 세팅한다.
 	/// </summary>
-	void SetOnAccept(std::function<void(Session*)> on_accept)
+	void SetOnConnect(std::function<void(int32_t)> on_connect)
 	{
-		OnAccept = on_accept;
+		OnConnect = on_connect;
 	}
 
 	/// <summary>
 	/// 로직 단에서 정의한 Recv 시의 콜백 함수를 세팅한다.
 	/// </summary>
-	void SetOnRecv(std::function<void(Session*, DWORD)> on_recv)
+	void SetOnRecv(std::function<void(int32_t, const char*, DWORD)> on_recv)
 	{
 		OnRecv = on_recv;
 	}
@@ -39,7 +39,7 @@ public:
 	/// <summary>
 	/// 로직 단에서 정의한 Disconnect 시의 콜백 함수를 세팅한다.
 	/// </summary>
-	void SetOnDisconnect(std::function<void(Session*)> on_disconnect)
+	void SetOnDisconnect(std::function<void(int32_t)> on_disconnect)
 	{
 		OnDisconnect = on_disconnect;
 	}
@@ -141,7 +141,7 @@ private:
 	bool						is_accepter_running_ = true;
 	bool						is_sender_running_ = true;	
 
-	std::function<void(Session*)>			OnAccept = NULL;
-	std::function<void(Session*, DWORD)>	OnRecv = NULL;
-	std::function<void(Session*)>			OnDisconnect = NULL;
+	std::function<void(int32_t)>							OnConnect = NULL;
+	std::function<void(int32_t, const char*, DWORD)>		OnRecv = NULL;
+	std::function<void(int32_t)>							OnDisconnect = NULL;
 };

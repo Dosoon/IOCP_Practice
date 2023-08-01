@@ -16,10 +16,9 @@ public:
 	}
 
 private:
-	void OnAccept(Session* p_session);
-	void OnRecv(Session* p_session, DWORD io_size);
-	void OnDisconnect(Session* p_session);
-	bool GetSessionIpPort(Session* p_session, char* ip_dest, int32_t ip_len, uint16_t& port_dest);
+	void OnConnect(int32_t session_idx);
+	void OnRecv(int32_t session_idx, const char* p_data, DWORD len);
+	void OnDisconnect(int32_t session_idx);
 	bool CreatePacketProcessThread();
 	bool DestroyPacketProcessThread();
 	void PacketProcessThread();
