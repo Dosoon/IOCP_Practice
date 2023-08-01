@@ -449,12 +449,12 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 			// 세션 활성화
 			p_session->is_activated_.store(true);
 
+			++session_cnt_;
+
 			// Recv 바인드
 			if (!BindRecv(p_session)) {
 				CloseSocket(p_session);
 			}
-
-			++session_cnt_;
 		}
 		else {
 			CloseSocket(p_session);
@@ -570,7 +570,8 @@ void Network::ClearSession(Session* p_session)
 	ZeroMemory(&p_session->send_overlapped_ex_, sizeof(OverlappedEx));
 	ZeroMemory(&p_session->accept_overlapped_ex_, sizeof(OverlappedEx));
 
-	// Send 링 버퍼 초기화
+	// Send 링 버퍼 락 걸고 초기화
+	std::lock_guard<std::mutex> lock(p_session->send_lock_);
 	p_session->send_buf_.ClearBuffer();
 
 	// Send 사용 여부 초기화
