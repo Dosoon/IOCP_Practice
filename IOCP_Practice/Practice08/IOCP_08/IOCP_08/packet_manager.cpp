@@ -1,11 +1,13 @@
 #include "packet_manager.h"
 
 #include <iostream>
+#include <Windows.h>
 
 #include "packet_id.h"
 #include "error_code.h"
+#include "redis_task.h"
 
-void PacketManager::Init(const int32_t max_user_cnt)
+void PacketManager::Init(const int32_t max_user_cnt, const int32_t redis_thread_cnt)
 {
 	user_manager_.Init(max_user_cnt);
 
@@ -13,6 +15,12 @@ void PacketManager::Init(const int32_t max_user_cnt)
 	packet_handlers_[(int)PACKET_ID::kSYS_USER_DISCONNECT] = &PacketManager::DisconnectHandler;
 
 	packet_handlers_[(int)PACKET_ID::kLOGIN_REQUEST] = &PacketManager::LoginHandler;
+	packet_handlers_[(int)REDIS_TASK_ID::kREQUEST_LOGIN] = &PacketManager::LoginDBResHandler;
+
+	if (redis_manager_.Init("127.0.0.1") == false) {
+		return;
+	}
+	redis_manager_.Run(redis_thread_cnt);
 }
 
 void PacketManager::Run()
@@ -68,6 +76,11 @@ void PacketManager::PacketProcessThread()
 		if (auto pkt = DequeueSystemPacket(); pkt.has_value()) {
 			idle = false;
 			ProcessPacket(*pkt);
+		}
+
+		if (auto task = redis_manager_.GetTaskRes(); task.has_value()) {
+			idle = false;
+			ProcessPacket(*task);
 		}
 
 		if (idle) {
@@ -165,31 +178,59 @@ void PacketManager::LoginHandler(uint32_t session_idx, uint16_t data_size, char*
 	auto p_user_id = p_login_pkt->UserID;
 
 	// 응답 패킷
-	LOGIN_RESPONSE_PACKET loginResPacket;
-	loginResPacket.PacketId = (uint16_t)PACKET_ID::kLOGIN_RESPONSE;
-	loginResPacket.PacketLength = sizeof(LOGIN_RESPONSE_PACKET);
+	LOGIN_RESPONSE_PACKET res_login_pkt;
+	res_login_pkt.PacketId = (uint16_t)PACKET_ID::kLOGIN_RESPONSE;
+	res_login_pkt.PacketLength = sizeof(LOGIN_RESPONSE_PACKET);
 
 	// 접속자 수가 최대 인원을 초과했다면 실패
 	if (user_manager_.GetCurrentUserCnt() >= user_manager_.GetMaxUserCnt())
 	{
-		loginResPacket.Result = (uint16_t)ERROR_CODE::kLOGIN_USER_USED_ALL_OBJ;
-		SendPacketFunc(session_idx, (char*)&loginResPacket, sizeof(LOGIN_RESPONSE_PACKET));
+		res_login_pkt.Result = (uint16_t)ERROR_CODE::kLOGIN_USER_USED_ALL_OBJ;
+		SendPacketFunc(session_idx, (char*)&res_login_pkt, sizeof(LOGIN_RESPONSE_PACKET));
 		return;
 	}
 
 	// UserID 필드로 접속 여부 확인
 	if (user_manager_.FindUserIndexByID(p_user_id) == -1)
 	{
-		user_manager_.AddUser(p_user_id, session_idx);
+		RedisLoginReq login_db_pkt;
+		CopyMemory(login_db_pkt.UserID, p_login_pkt->UserID, (MAX_USER_ID_LEN + 1));
+		CopyMemory(login_db_pkt.UserPW, p_login_pkt->UserPW, (MAX_USER_PW_LEN + 1));
 
-		loginResPacket.Result = (uint16_t)ERROR_CODE::kNONE;
-		SendPacketFunc(session_idx, (char*)&loginResPacket, sizeof(LOGIN_RESPONSE_PACKET));
+		RedisTask task;
+		task.UserIndex = session_idx;
+		task.TaskID = REDIS_TASK_ID::kREQUEST_LOGIN;
+		task.DataSize = sizeof(RedisLoginReq);
+		task.pData = new char[task.DataSize];
+		CopyMemory(task.pData, reinterpret_cast<char*>(&login_db_pkt), task.DataSize);
+
+		redis_manager_.PushTaskReq(task);
 	}
 	else
 	{
 		// 이미 접속중인 경우
-		loginResPacket.Result = (uint16_t)ERROR_CODE::kLOGIN_USER_ALREADY;
-		SendPacketFunc(session_idx, (char*)&loginResPacket, sizeof(LOGIN_RESPONSE_PACKET));
+		res_login_pkt.Result = (uint16_t)ERROR_CODE::kLOGIN_USER_ALREADY;
+		SendPacketFunc(session_idx, (char*)&res_login_pkt, sizeof(LOGIN_RESPONSE_PACKET));
 		return;
 	}
+}
+
+void PacketManager::LoginDBResHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
+{
+	std::cout << "LoginDBRes Handler\n";
+
+	auto p_login_res_pkt = reinterpret_cast<RedisLoginRes*>(p_data);
+
+	if (p_login_res_pkt->Result == (uint16_t)ERROR_CODE::kNONE) {
+		auto user = user_manager_.GetUserByIndex(session_idx);
+		user_manager_.AddUser(user->GetUserID(), session_idx);
+		user->SetConfirmed(true);
+	}
+
+	// 응답 전송
+	LOGIN_RESPONSE_PACKET login_res_pkt;
+	login_res_pkt.PacketId = (uint16_t)PACKET_ID::kLOGIN_RESPONSE;
+	login_res_pkt.PacketLength = sizeof(LOGIN_RESPONSE_PACKET);
+	login_res_pkt.Result = p_login_res_pkt->Result;
+	SendPacketFunc(session_idx, (char*)&login_res_pkt, sizeof(LOGIN_RESPONSE_PACKET));
 }

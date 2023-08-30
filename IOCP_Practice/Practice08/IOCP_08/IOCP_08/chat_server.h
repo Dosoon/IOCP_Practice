@@ -5,7 +5,6 @@
 #include "packet.h"
 #include "network.h"
 #include "packet_manager.h"
-#include "redis_manager.h"
 
 class ChatServer
 {
@@ -26,5 +25,4 @@ private:
 	bool is_server_running_ = false;
 
 	PacketManager	packet_manager_;
-	RedisManager	redis_manager_;
 };

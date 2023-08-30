@@ -449,10 +449,9 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 
 		// IOCP에 바인드
 		if (BindIOCompletionPort(p_session)) {
-			OnConnect(p_session->index_);
-
-			// 세션 활성화
 			p_session->Activate();
+
+			OnConnect(p_session->index_);
 
 			// Recv 바인드
 			if (!BindRecv(p_session)) {
@@ -484,12 +483,8 @@ void Network::AccepterThread()
 			}
 
 			// 사용 가능한 시간인지 확인
-			if (static_cast<unsigned long long>(cur_time) < session->latest_conn_closed_) {
-				continue;
-			}
-
 			auto diff = cur_time - session->latest_conn_closed_;
-			if (diff <= SESSION_REUSE_TIME) {
+			if (diff < 0 || diff <= SESSION_REUSE_TIME) {
 				continue;
 			}
 
@@ -543,15 +538,9 @@ void Network::CloseSocket(Session* p_session, bool is_force)
 		return;
 	}
 
-	// 기본 Linger 옵션 세팅
-	LINGER linger = { 0, 0 };
+	// is_force 여부에 따라 RST 처리
+	LINGER linger = { is_force, 0 };
 
-	// is_force가 true라면 RST 처리
-	if (is_force) {
-		linger.l_onoff = 1;
-	}
-
-	// Linger 옵션 설정
 	setsockopt(p_session->socket_, SOL_SOCKET, SO_LINGER,
 		reinterpret_cast<const char*>(&linger), sizeof(linger));
 
@@ -567,22 +556,14 @@ void Network::CloseSocket(Session* p_session, bool is_force)
 /// </summary>
 void Network::ClearSession(Session* p_session)
 {
-	// 소켓 초기화
 	p_session->socket_ = INVALID_SOCKET;
-
-	// Session 구조체 초기화
 	ZeroMemory(&p_session->recv_overlapped_ex_, sizeof(OverlappedEx));
-
-	// Send 링 버퍼 초기화
 	{
+		// Close하는 중에 다른 쓰레드에서 Send 링버퍼에 접근하는 것을 방지
 		std::lock_guard<std::mutex> lock(p_session->send_lock_);
 		p_session->send_buf_.ClearBuffer();
 	}
-
-	// Send 사용 여부 초기화
-	p_session->is_sending_ = false;
-
-	// 마지막 연결 시각 갱신
+	p_session->is_sending_.store(false);
 	p_session->latest_conn_closed_ = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 

@@ -40,11 +40,15 @@ void Session::InitAcceptOverlapped()
 	accept_overlapped_ex_.op_type_ = IOOperation::kACCEPT;
 }
 
+/// <summary>
+/// 세션 재사용 전 데이터 초기화 및 활성 상태 on
+/// </summary>
 void Session::Activate()
 {
 	ZeroMemory(&recv_overlapped_ex_, sizeof(OverlappedEx));
 	ZeroMemory(&send_overlapped_ex_, sizeof(OverlappedEx));
 	is_activated_.store(true);
+	send_buf_.ClearBuffer();
 }
 
 /// <summary> <para>

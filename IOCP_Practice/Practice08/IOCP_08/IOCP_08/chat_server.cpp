@@ -24,13 +24,8 @@ bool ChatServer::Start(uint16_t port, int32_t max_session_cnt, int32_t session_b
 	}
 
 	packet_manager_.SetSendPacket(std::bind(&Network::SendPacket, &network_, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-	packet_manager_.Init(max_session_cnt);
+	packet_manager_.Init(max_session_cnt, redis_thread_cnt);
 	packet_manager_.Run();
-
-	if (redis_manager_.Init("127.0.0.1") == false) {
-		return false;
-	}
-	redis_manager_.Run(redis_thread_cnt);
 
 	std::cout << "[StartServer] Server Started\n";
 	return true;

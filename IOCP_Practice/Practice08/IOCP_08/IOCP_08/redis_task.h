@@ -4,7 +4,7 @@
 #define kMAX_USER_ID_LEN 20
 #define kMAX_USER_PW_LEN 20
 
-enum class RedisTaskID : uint16_t
+enum class REDIS_TASK_ID : uint16_t
 {
 	kINVALID = 0,
 
@@ -15,7 +15,7 @@ enum class RedisTaskID : uint16_t
 struct RedisTask
 {
 	uint32_t UserIndex = 0;
-	RedisTaskID TaskID = RedisTaskID::kINVALID;
+	REDIS_TASK_ID TaskID = REDIS_TASK_ID::kINVALID;
 	uint16_t DataSize = 0;
 	char* pData = nullptr;
 

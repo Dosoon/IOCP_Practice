@@ -11,11 +11,12 @@
 #include "packet.h"
 #include "user_manager.h"
 #include "packet_handler/handler.h"
+#include "redis_manager.h"
 
 class PacketManager
 {
 public:
-	void Init(const int32_t max_user_cnt);
+	void Init(const int32_t max_user_cnt, const int32_t redis_thread_cnt);
 	void Run();
 	void Terminate();
 
@@ -35,10 +36,11 @@ private:
 	// -----------------------------------------
 	// Packet Handlers
 	// -----------------------------------------
-	
+
 	void ConnectHandler(uint32_t session_idx, uint16_t data_size, char* p_data);
 	void DisconnectHandler(uint32_t session_idx, uint16_t data_size, char* p_data);
 	void LoginHandler(uint32_t session_idx, uint16_t data_size, char* p_data);
+	void LoginDBResHandler(uint32_t session_idx, uint16_t data_size, char* p_data);
 
 	bool	is_thread_running_ = false;
 
@@ -51,4 +53,5 @@ private:
 	Concurrency::concurrent_queue<PacketInfo>		system_packet_queue_;
 
 	UserManager				user_manager_;
+	RedisManager			redis_manager_;
 };
