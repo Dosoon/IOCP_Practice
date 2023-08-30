@@ -5,7 +5,7 @@
 /// <summary>
 /// WSAStartup 및 리슨소켓 초기화
 /// </summary>
-bool Network::InitSocket()
+bool Network::InitListenSocket()
 {
 	// Winsock 초기화
 	WSADATA wsa_data;
@@ -70,7 +70,7 @@ bool Network::BindAndListen(const uint16_t port, int32_t backlog_queue_size)
 /// </summary>
 bool Network::Start(uint16_t port, const uint32_t max_session_cnt, const int32_t session_buf_size)
 {
-	if (!InitSocket()) {
+	if (!InitListenSocket()) {
 		std::cout << "[Start] Failed to Initialize Socket\n";
 		return false;
 	}
@@ -85,7 +85,7 @@ bool Network::Start(uint16_t port, const uint32_t max_session_cnt, const int32_t
 	}
 
 	// 워커 쓰레드 및 Accepter 쓰레드 생성
-	auto create_ret = CreateThread();
+	auto create_ret = CreateWorkerAndIOThread();
 	if (!create_ret) {
 		std::cout << "[Start] Failed to Create Threads\n";
 		return false;
@@ -118,7 +118,7 @@ bool Network::CreateIOCP()
 /// <summary>
 /// 서버 실행에 필요한 워커쓰레드와 Accepter 쓰레드를 생성합니다.
 /// </summary>
-bool Network::CreateThread()
+bool Network::CreateWorkerAndIOThread()
 {
 	// Worker 스레드 생성
 	auto create_worker_ret = CreateWorkerThread();
@@ -157,6 +157,11 @@ void Network::Terminate()
 
 	// 모든 쓰레드의 종료 확인
 	DestroyThread();
+
+	// 세션 풀 할당 해제
+	for (auto& session : session_list_) {
+		delete session;
+	}
 
 	// IOCP 핸들 close 및 서버 종료
 	CloseHandle(iocp_);
@@ -447,7 +452,7 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 			OnConnect(p_session->index_);
 
 			// 세션 활성화
-			p_session->is_activated_.store(true);
+			p_session->Activate();
 
 			// Recv 바인드
 			if (!BindRecv(p_session)) {
@@ -569,7 +574,10 @@ void Network::ClearSession(Session* p_session)
 	ZeroMemory(&p_session->recv_overlapped_ex_, sizeof(OverlappedEx));
 
 	// Send 링 버퍼 초기화
-	p_session->send_buf_.ClearBuffer();
+	{
+		std::lock_guard<std::mutex> lock(p_session->send_lock_);
+		p_session->send_buf_.ClearBuffer();
+	}
 
 	// Send 사용 여부 초기화
 	p_session->is_sending_ = false;

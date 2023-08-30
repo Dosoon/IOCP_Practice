@@ -68,7 +68,7 @@ int32_t RingBuffer::GetContinuousDequeueSize()
 	return (rear_ - front_);
 }
 
-int32_t RingBuffer::Enqueue(char* src, int32_t len)
+int32_t RingBuffer::Enqueue(const char* src, int32_t len)
 {
 	if (GetFreeSize() == 0)
 		return 0;

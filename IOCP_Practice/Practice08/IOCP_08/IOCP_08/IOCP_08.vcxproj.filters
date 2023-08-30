@@ -39,6 +39,12 @@
     <ClCompile Include="user.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="redis_manager.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="RedisClient.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="chat_server.h">
@@ -66,6 +72,21 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="user.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="packet_id.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="error_code.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="redis_manager.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="redis_task.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="RedisClient.hpp">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

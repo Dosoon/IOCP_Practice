@@ -38,9 +38,10 @@ public:
 	}
 
 	void InitAcceptOverlapped();
+	void Activate();
 	bool BindAccept(SOCKET listen_socket);
 	bool BindSend();
-	int32_t EnqueueSendData(char* data, int32_t data_len);
+	int32_t EnqueueSendData(char* data_, int32_t data_len);
 	bool HasSendData();
 	void SetWsaBuf(WSABUF* wsa_buf, int32_t& buffer_cnt);
 	bool ErrorHandler(bool result, int32_t error_code, const char* method, int32_t allow_codes, ...);

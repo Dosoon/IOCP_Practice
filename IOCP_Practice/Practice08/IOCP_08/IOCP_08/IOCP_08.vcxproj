@@ -120,12 +120,15 @@
       <ConformanceMode>true</ConformanceMode>
       <Optimization>Disabled</Optimization>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>..\..\thirdparty\hiredis;</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>..\..\thirdparty\hiredis\VS-IDE\Release;</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -133,6 +136,8 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="network.cpp" />
     <ClCompile Include="packet_manager.cpp" />
+    <ClCompile Include="RedisClient.cpp" />
+    <ClCompile Include="redis_manager.cpp" />
     <ClCompile Include="ring_buffer.cpp" />
     <ClCompile Include="session.cpp" />
     <ClCompile Include="user.cpp" />
@@ -140,10 +145,15 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="chat_server.h" />
+    <ClInclude Include="error_code.h" />
     <ClInclude Include="network.h" />
     <ClInclude Include="overlapped_ex_define.h" />
     <ClInclude Include="packet.h" />
+    <ClInclude Include="packet_id.h" />
     <ClInclude Include="packet_manager.h" />
+    <ClInclude Include="RedisClient.hpp" />
+    <ClInclude Include="redis_manager.h" />
+    <ClInclude Include="redis_task.h" />
     <ClInclude Include="ring_buffer.h" />
     <ClInclude Include="session.h" />
     <ClInclude Include="user.h" />

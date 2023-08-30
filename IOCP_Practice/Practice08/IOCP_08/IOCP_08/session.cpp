@@ -40,6 +40,13 @@ void Session::InitAcceptOverlapped()
 	accept_overlapped_ex_.op_type_ = IOOperation::kACCEPT;
 }
 
+void Session::Activate()
+{
+	ZeroMemory(&recv_overlapped_ex_, sizeof(OverlappedEx));
+	ZeroMemory(&send_overlapped_ex_, sizeof(OverlappedEx));
+	is_activated_.store(true);
+}
+
 /// <summary> <para>
 /// WSASend를 Call하여 비동기 Send 요청 </para> <para>
 /// WSASend가 실패했을 때에 false를 리턴한다. </para>
@@ -146,13 +153,13 @@ bool Session::ErrorHandler(int32_t socket_result, int32_t error_code, const char
 /// <summary>
 /// 락을 걸고 세션의 Send 링 버퍼에 데이터를 넣는다.
 /// </summary>
-int32_t Session::EnqueueSendData(char* data, int32_t len)
+int32_t Session::EnqueueSendData(char* data_, int32_t len)
 {
 	// Send 링버퍼 락 걸기
 	std::lock_guard<std::mutex> lock(send_lock_);
 
 	// Enqueue에 성공한 크기를 리턴
-	return send_buf_.Enqueue(data, len);
+	return send_buf_.Enqueue(data_, len);
 }
 
 /// <summary>

@@ -52,10 +52,21 @@ public:
 		return session_list_[session_idx];
 	}
 
+	void SendPacket(int32_t session_idx, const char* p_data, const uint16_t len)
+	{
+		Session* p_session = session_list_[session_idx];
+		if (p_session == nullptr)
+		{
+			return;
+		}
+
+		p_session->EnqueueSendData(const_cast<char*>(p_data), len);
+	}
+
 private:
-	bool InitSocket();
+	bool InitListenSocket();
 	bool BindAndListen(const uint16_t port, const int32_t backlog_queue_size = 5);
-	bool CreateThread();
+	bool CreateWorkerAndIOThread();
 	bool CreateIOCP();
 	void DestroyThread();
 
@@ -132,7 +143,7 @@ private:
 
 	std::vector<Session*>		session_list_;
 	SOCKET						listen_socket_ = INVALID_SOCKET;
-	uint32_t					session_cnt_ = 0;
+	std::atomic<uint32_t>		session_cnt_ = 0;
 	std::vector<std::thread>	worker_thread_list_;
 	std::thread					accepter_thread_;
 	std::thread					sender_thread_;

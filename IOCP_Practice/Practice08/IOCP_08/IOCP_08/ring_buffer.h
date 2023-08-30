@@ -15,7 +15,7 @@ public:
 	int32_t GetContinuousEnqueueSize();
 	int32_t GetContinuousDequeueSize();
 
-	int32_t Enqueue(char* src, int32_t len);
+	int32_t Enqueue(const char* src, int32_t len);
 	int32_t Dequeue(char* dest, int32_t len);
 	int32_t Peek(char* dest, int32_t len);
 

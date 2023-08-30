@@ -4,11 +4,13 @@
 
 #include "packet.h"
 #include "network.h"
+#include "packet_manager.h"
+#include "redis_manager.h"
 
 class ChatServer
 {
 public:
-	bool Start(uint16_t port, int32_t max_client_count, int32_t session_buf_size);
+	bool Start(uint16_t port, int32_t max_client_count, int32_t session_buf_size, int32_t redis_thread_cnt = 1);
 	void Terminate();
 	bool IsServerRunning()
 	{
@@ -19,16 +21,10 @@ private:
 	void OnConnect(int32_t session_idx);
 	void OnRecv(int32_t session_idx, const char* p_data, DWORD len);
 	void OnDisconnect(int32_t session_idx);
-	bool CreatePacketProcessThread();
-	bool DestroyPacketProcessThread();
-	void PacketProcessThread();
-	void EnqueuePacket(int32_t session_index, int32_t len, char* data_src);
-	Packet DequePacket();
 
 	Network network_;
 	bool is_server_running_ = false;
 
-	std::thread packet_process_thread_;
-	std::deque<Packet> packet_deque_;
-	std::mutex packet_deque_lock_;
+	PacketManager	packet_manager_;
+	RedisManager	redis_manager_;
 };
