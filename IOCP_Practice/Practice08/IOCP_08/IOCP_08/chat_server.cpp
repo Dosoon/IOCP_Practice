@@ -13,17 +13,13 @@ bool ChatServer::Start(uint16_t port, int32_t max_session_cnt, int32_t session_b
 {
 	is_server_running_ = true;
 
-	// 네트워크에서 Accept, Recv, Disconnect 발생 시 에코 서버에서 수행할 콜백함수 로직 세팅
-	network_.SetOnConnect(std::bind(&ChatServer::OnConnect, this, std::placeholders::_1));
-	network_.SetOnRecv(std::bind(&ChatServer::OnRecv, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-	network_.SetOnDisconnect(std::bind(&ChatServer::OnDisconnect, this, std::placeholders::_1));
+	SetDelegate();
 
 	if (!network_.Start(port, max_session_cnt, session_buf_size)) {
 		std::cout << "[StartServer] Failed to Start\n";
 		return false;
 	}
 
-	packet_manager_.SetSendPacket(std::bind(&Network::SendPacket, &network_, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 	packet_manager_.Init(max_session_cnt, redis_thread_cnt);
 	packet_manager_.Run();
 
@@ -42,7 +38,24 @@ void ChatServer::Terminate()
 }
 
 /// <summary>
-/// 네트워크 단에서 Accept시에 수행되는 콜백 함수이다.
+/// 네트워크 단에서 사용될 Delegate 함수들 세팅
+/// </summary>
+void ChatServer::SetDelegate()
+{
+	// 네트워크에서 Accept, Recv, Disconnect 발생 시 에코 서버에서 수행할 Delegate 세팅
+	network_.SetOnConnect(std::bind(&ChatServer::OnConnect, this, std::placeholders::_1));
+	network_.SetOnRecv(std::bind(&ChatServer::OnRecv, this,
+					   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+	network_.SetOnDisconnect(std::bind(&ChatServer::OnDisconnect, this, std::placeholders::_1));
+
+	// 패킷 매니저에서 사용될 SendPacket 함수 세팅
+	packet_manager_.SetSendPacket(std::bind(&Network::SendPacket, &network_,
+								  std::placeholders::_1, std::placeholders::_2,
+								  std::placeholders::_3));
+}
+
+/// <summary>
+/// 네트워크 단에서 Accept시에 수행됨
 /// </summary>
 void ChatServer::OnConnect(int32_t session_idx)
 {
@@ -69,7 +82,7 @@ void ChatServer::OnConnect(int32_t session_idx)
 }
 
 /// <summary>
-/// 네트워크 단에서 Recv시에 수행되는 콜백 함수이다.
+/// 네트워크 단에서 Recv시에 수행됨
 /// </summary>
 void ChatServer::OnRecv(int32_t session_idx, const char* p_data, DWORD len)
 {
@@ -81,7 +94,7 @@ void ChatServer::OnRecv(int32_t session_idx, const char* p_data, DWORD len)
 }
 
 /// <summary>
-/// 네트워크 단에서 세션 Disconnect시에 수행되는 콜백 함수이다.
+/// 네트워크 단에서 세션 Disconnect시에 수행됨
 /// </summary>
 void ChatServer::OnDisconnect(int32_t session_idx)
 {

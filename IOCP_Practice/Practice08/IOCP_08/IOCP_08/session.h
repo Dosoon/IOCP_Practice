@@ -37,24 +37,69 @@ public:
 		delete[] recv_buf_;
 	}
 
-	void InitAcceptOverlapped();
 	void Activate();
+
+	// ------------------------------
+	// Accept
+	// ------------------------------
+
 	bool BindAccept(SOCKET listen_socket);
-	bool BindSend();
-	int32_t EnqueueSendData(char* data_, int32_t data_len);
-	bool HasSendData();
-	void SetWsaBuf(WSABUF* wsa_buf, int32_t& buffer_cnt);
-	bool ErrorHandler(bool result, int32_t error_code, const char* method, int32_t allow_codes, ...);
-	bool ErrorHandler(int32_t socket_result, int32_t error_code, const char* method, int32_t allow_codes, ...);
+	void SetAcceptOverlapped();
 	bool GetSessionIpPort(char* ip_dest, int32_t ip_len, uint16_t& port_dest);
 
-	/// <summary>
-	/// 연결 유지가 허용되는 에러 코드인지 검사한다.
-	/// </summary>
-	bool AllowedErrorCode(int32_t errorCode)
+	// ------------------------------
+	// Send & Recv
+	// ------------------------------
+
+	bool BindSend();
+	void SetSendOverlapped(WSABUF* wsa_buf, int32_t& buffer_cnt);
+	void SetWsaBuf(WSABUF* wsa_buf, int32_t& buffer_cnt);
+
+	bool BindRecv();
+	void SetRecvOverlapped();
+
+	// ------------------------------
+	// Send 버퍼 접근
+	// ------------------------------
+
+	int32_t EnqueueSendData(char* data_, int32_t data_len);
+	void ClearSendBuffer();
+	bool HasSendData();
+
+	// ------------------------------
+	// Getter & Setter
+	// ------------------------------
+	
+	void SetConnectionClosedTime(uint64_t time)
 	{
-		return errorCode == ERROR_IO_PENDING;
+		latest_conn_closed_ = time;
 	}
+
+	uint64_t GetConnectionClosedTime()
+	{
+		return latest_conn_closed_;
+	}
+
+	void SetSocket(SOCKET sock)
+	{
+		socket_ = sock;
+	}
+
+	SOCKET GetSocket()
+	{
+		return socket_;
+	}
+
+	// ------------------------------
+	// 에러 핸들링
+	// ------------------------------
+
+	bool ErrorHandler(bool result, int32_t error_code, const char* method,
+					  int32_t allow_codes, ...);
+	bool ErrorHandler(int32_t socket_result, int32_t error_code, const char* method,
+					  int32_t allow_codes, ...);
+
+
 
 	int32_t				index_ = -1;					// 세션 인덱스
 	SOCKET				socket_ = INVALID_SOCKET;		// 클라이언트 소켓

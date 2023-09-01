@@ -17,40 +17,35 @@ public:
 		WSACleanup();
 	}
 
+	// ------------------------------
+	// 시작 및 종료
+	// ------------------------------
+
 	bool Start(uint16_t port, const uint32_t max_session_cnt, const int32_t session_buf_size);
 	void Terminate();
 
-	/// <summary>
-	/// 로직 단에서 정의한 Accept 시의 콜백 함수를 세팅한다.
-	/// </summary>
+	// ------------------------------
+	// 로직 단에서 정의한 Callback Setter
+	// ------------------------------
+
 	void SetOnConnect(std::function<void(int32_t)> on_connect)
 	{
 		OnConnect = on_connect;
 	}
-
-	/// <summary>
-	/// 로직 단에서 정의한 Recv 시의 콜백 함수를 세팅한다.
-	/// </summary>
+	
 	void SetOnRecv(std::function<void(int32_t, const char*, DWORD)> on_recv)
 	{
 		OnRecv = on_recv;
 	}
-
-	/// <summary>
-	/// 로직 단에서 정의한 Disconnect 시의 콜백 함수를 세팅한다.
-	/// </summary>
+	
 	void SetOnDisconnect(std::function<void(int32_t)> on_disconnect)
 	{
 		OnDisconnect = on_disconnect;
 	}
 
-	/// <summary>
-	/// 세션 인덱스로 세션 포인터를 반환한다.
-	/// </summary>
-	Session* GetSessionByIdx(int32_t session_idx)
-	{
-		return session_list_[session_idx];
-	}
+	// ------------------------------
+	// 로직단에서의 Send 호출을 위한 Public Send Func
+	// ------------------------------
 
 	void SendPacket(int32_t session_idx, const char* p_data, const uint16_t len)
 	{
@@ -63,12 +58,19 @@ public:
 		p_session->EnqueueSendData(const_cast<char*>(p_data), len);
 	}
 
+	/// <summary>
+	/// 세션 인덱스로 세션 포인터를 반환한다.
+	/// </summary>
+	Session* GetSessionByIdx(int32_t session_idx)
+	{
+		return session_list_[session_idx];
+	}
+
 private:
 	bool InitListenSocket();
 	bool BindAndListen(const uint16_t port, const int32_t backlog_queue_size = 5);
-	bool CreateWorkerAndIOThread();
 	bool CreateIOCP();
-	void DestroyThread();
+	bool CreateWorkerAndIOThread();
 
 	void CreateSessionPool(const int32_t max_session_cnt, const int32_t session_buf_size);
 	bool CreateWorkerThread();
@@ -76,8 +78,6 @@ private:
 	bool CreateSenderThread();
 
 	bool BindIOCompletionPort(Session* p_session);
-	bool BindRecv(Session* p_session);
-	void SetRecvOverlappedEx(Session* p_session);
 
 	void WorkerThread();
 	void AccepterThread();
@@ -89,6 +89,7 @@ private:
 	void DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED p_overlapped);
 	bool CheckGQCSResult(Session* p_session, bool gqcs_ret, DWORD io_size, LPOVERLAPPED p_overlapped);
 
+	void DestroyThread();
 	void DestroyWorkerThread();
 	void DestroyAccepterThread();
 	void DestroySenderThread();

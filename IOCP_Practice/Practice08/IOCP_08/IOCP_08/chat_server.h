@@ -17,6 +17,7 @@ public:
 	}
 
 private:
+	void SetDelegate();
 	void OnConnect(int32_t session_idx);
 	void OnRecv(int32_t session_idx, const char* p_data, DWORD len);
 	void OnDisconnect(int32_t session_idx);

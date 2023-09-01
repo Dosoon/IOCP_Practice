@@ -25,6 +25,17 @@ void RedisManager::Run(const int32_t max_thread_cnt)
 	}
 }
 
+bool RedisManager::Start(int32_t thread_cnt)
+{
+	if (Init() == false) {
+		return false;
+	}
+
+	Run(thread_cnt);
+
+	return true;
+}
+
 void RedisManager::Terminate()
 {
 	is_running_ = false;

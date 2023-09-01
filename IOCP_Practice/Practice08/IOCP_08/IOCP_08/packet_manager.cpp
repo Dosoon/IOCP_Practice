@@ -11,16 +11,9 @@ void PacketManager::Init(const int32_t max_user_cnt, const int32_t redis_thread_
 {
 	user_manager_.Init(max_user_cnt);
 
-	packet_handlers_[(int)PACKET_ID::kSYS_USER_CONNECT] = &PacketManager::ConnectHandler;
-	packet_handlers_[(int)PACKET_ID::kSYS_USER_DISCONNECT] = &PacketManager::DisconnectHandler;
+	BindHandler();
 
-	packet_handlers_[(int)PACKET_ID::kLOGIN_REQUEST] = &PacketManager::LoginHandler;
-	packet_handlers_[(int)REDIS_TASK_ID::kRESPONSE_LOGIN] = &PacketManager::LoginDBResHandler;
-
-	if (redis_manager_.Init("127.0.0.1") == false) {
-		return;
-	}
-	redis_manager_.Run(redis_thread_cnt);
+	redis_manager_.Start(redis_thread_cnt);
 }
 
 void PacketManager::Run()
@@ -87,6 +80,18 @@ void PacketManager::PacketProcessThread()
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 	}
+}
+
+/// <summary>
+/// 각 핸들러에 대한 함수 포인터를 packet_handlers_ 맵에 설정
+/// </summary>
+void PacketManager::BindHandler()
+{
+	packet_handlers_[(int)PACKET_ID::kSYS_USER_CONNECT] = &PacketManager::ConnectHandler;
+	packet_handlers_[(int)PACKET_ID::kSYS_USER_DISCONNECT] = &PacketManager::DisconnectHandler;
+
+	packet_handlers_[(int)PACKET_ID::kLOGIN_REQUEST] = &PacketManager::LoginHandler;
+	packet_handlers_[(int)REDIS_TASK_ID::kRESPONSE_LOGIN] = &PacketManager::LoginDBResHandler;
 }
 
 bool PacketManager::ProcessPacket(PacketInfo& pkt, bool user_pkt)

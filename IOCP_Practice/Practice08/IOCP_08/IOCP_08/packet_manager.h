@@ -27,6 +27,8 @@ public:
 private:
 	std::function<void(uint32_t, char*, uint16_t)> SendPacketFunc;
 
+	void BindHandler();
+
 	bool ProcessPacket(PacketInfo& pkt, bool user_pkt = false);
 	void PacketProcessThread();
 	void DestroyPacketProcessThread();

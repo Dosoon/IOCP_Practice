@@ -286,7 +286,7 @@ bool Network::CreateSenderThread()
 bool Network::BindIOCompletionPort(Session* p_session)
 {
 	// 세션 소켓을 Completion Port에 바인드
-	auto handle = CreateIoCompletionPort(reinterpret_cast<HANDLE>(p_session->socket_),
+	auto handle = CreateIoCompletionPort(reinterpret_cast<HANDLE>(p_session->GetSocket()),
 									     iocp_, reinterpret_cast<ULONG_PTR>(p_session), 0);
 
 	// 바인드 성공여부 확인
@@ -298,63 +298,17 @@ bool Network::BindIOCompletionPort(Session* p_session)
 }
 
 /// <summary>
-/// WSARecv Overlapped I/O 작업을 요청한다.
-/// </summary>
-bool Network::BindRecv(Session* p_session)
-{
-	DWORD flag = 0;
-	DWORD recved_bytes = 0;
-
-	// TODO : 세션에서 세팅하도록 옮기기
-	// 버퍼 정보 및 I/O Operation 타입 설정
-	SetRecvOverlappedEx(p_session);
-
-	// Recv 요청
-	auto recv_ret = WSARecv(p_session->socket_,
-							&p_session->recv_overlapped_ex_.wsa_buf_,
-							1, &recved_bytes, &flag,
-							&p_session->recv_overlapped_ex_.wsa_overlapped_,
-							NULL);
-
-	// 에러 처리
-	if (!ErrorHandler(recv_ret, WSAGetLastError(), "WSARecv", 1, ERROR_IO_PENDING)) {
-		return false;
-	}
-
-	return true;
-}
-
-/// <summary>
-/// RecvOverlappedEx에 버퍼 정보 및 I/O Operation 타입을 설정한다.
-/// </summary>
-void Network::SetRecvOverlappedEx(Session* p_session)
-{
-	p_session->recv_overlapped_ex_.socket_ = p_session->socket_;
-	p_session->recv_overlapped_ex_.wsa_buf_.len = p_session->buf_size_;
-	p_session->recv_overlapped_ex_.wsa_buf_.buf = p_session->recv_buf_;
-	p_session->recv_overlapped_ex_.op_type_ = IOOperation::kRECV;
-}
-
-/// <summary>
 /// Overlapped I/O 작업 완료 통지를 처리하는 워커 쓰레드
 /// </summary>
 void Network::WorkerThread()
 {
-	// TODO : while문 안으로 들어가도록 -> 코드 가독성 더 올리기
-	// CompletionKey
-	Session* p_session = NULL;
-
-	// GQCS 반환값
-	bool gqcs_ret = false;
-
-	// I/O 처리된 데이터 사이즈
-	DWORD io_size = 0;
-
-	// I/O 작업을 위해 요청한 Overlapped 구조체를 받을 포인터
-	LPOVERLAPPED p_overlapped = NULL;
-
 	while (is_worker_running_)
 	{
+		Session* p_session = NULL;
+		bool gqcs_ret = false;
+		DWORD io_size = 0;
+		LPOVERLAPPED p_overlapped = NULL;
+
 		gqcs_ret = GetQueuedCompletionStatus(iocp_, &io_size,
 			reinterpret_cast<PULONG_PTR>(&p_session), &p_overlapped, INFINITE);
 
@@ -418,7 +372,7 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 		// Recv 완료 후 다시 Recv 요청을 건다.
 		OnRecv(p_session->index_, p_session->recv_buf_, io_size);
 
-		if (!BindRecv(p_session)) {
+		if (!p_session->BindRecv()) {
 
 			// Recv 요청 실패 시 연결 종료
 			std::cout << "[WorkerThread] Failed to Re-bind Recv\n";
@@ -448,7 +402,7 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 			p_session->Activate();
 
 			// Recv 바인드
-			if (!BindRecv(p_session)) {
+			if (!p_session->BindRecv()) {
 				CloseSocket(p_session);
 			}
 
@@ -527,7 +481,7 @@ void Network::CloseSocket(Session* p_session, bool is_force)
 	}
 
 	// 재사용을 잠시 방지하기 위해 MAX값 설정
-	p_session->latest_conn_closed_ = UINT64_MAX;
+	p_session->SetConnectionClosedTime(UINT64_MAX);
 
 	// CloseSocket 중복 호출 방지
 	bool activated_expected = true;
@@ -539,11 +493,11 @@ void Network::CloseSocket(Session* p_session, bool is_force)
 	// is_force 여부에 따라 RST 처리
 	LINGER linger = { is_force, 0 };
 
-	setsockopt(p_session->socket_, SOL_SOCKET, SO_LINGER,
+	setsockopt(p_session->GetSocket(), SOL_SOCKET, SO_LINGER,
 		reinterpret_cast<const char*>(&linger), sizeof(linger));
 
 	// 소켓 닫고, Session 초기화 후 풀에 반납
-	closesocket(p_session->socket_);
+	closesocket(p_session->GetSocket());
 	ClearSession(p_session);
 
 	--session_cnt_;
@@ -554,15 +508,13 @@ void Network::CloseSocket(Session* p_session, bool is_force)
 /// </summary>
 void Network::ClearSession(Session* p_session)
 {
-	p_session->socket_ = INVALID_SOCKET;
+	p_session->SetSocket(INVALID_SOCKET);
 	ZeroMemory(&p_session->recv_overlapped_ex_, sizeof(OverlappedEx));
-	{
-		// Close하는 중에 다른 쓰레드에서 Send 링버퍼에 접근하는 것을 방지
-		std::lock_guard<std::mutex> lock(p_session->send_lock_);
-		p_session->send_buf_.ClearBuffer();
-	}
+	p_session->ClearSendBuffer();
 	p_session->is_sending_.store(false);
-	p_session->latest_conn_closed_ = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+	auto cur_time = std::chrono::duration_cast<std::chrono::seconds>
+					(std::chrono::steady_clock::now().time_since_epoch()).count();
+	p_session->SetConnectionClosedTime(cur_time);
 }
 
 /// <summary> <para>

@@ -14,14 +14,16 @@
 class RedisManager
 {
 public:
-	bool Init(std::string ip, uint16_t port = 6379);
-	void Run(const int32_t max_thread_cnt);
+	bool Start(int32_t thread_cnt = 1);
 	void Terminate();
 
 	void PushTaskReq(RedisTask task);
 	std::optional<RedisTask> GetTaskRes();
 
 private:
+	bool Init(std::string ip = "localhost", uint16_t port = 6379);
+	void Run(const int32_t max_thread_cnt);
+
 	void LoginHandler(uint32_t session_idx, uint16_t data_size, char* p_data);
 
 	bool Connect(std::string ip, uint16_t port);
