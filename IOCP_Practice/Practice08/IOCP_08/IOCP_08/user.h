@@ -23,6 +23,7 @@ public:
 
 	void Clear();
 	void SetLogin(const std::string& user_id);
+	void CompleteProcess(uint16_t pkt_size);
 
 	// ------------------------------
 	// Getter & Setter

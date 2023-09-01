@@ -145,6 +145,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="chat_server.h" />
+    <ClInclude Include="constants.h" />
     <ClInclude Include="error_code.h" />
     <ClInclude Include="network.h" />
     <ClInclude Include="overlapped_ex_define.h" />

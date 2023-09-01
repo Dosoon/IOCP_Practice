@@ -15,7 +15,7 @@ void PacketManager::Init(const int32_t max_user_cnt, const int32_t redis_thread_
 	packet_handlers_[(int)PACKET_ID::kSYS_USER_DISCONNECT] = &PacketManager::DisconnectHandler;
 
 	packet_handlers_[(int)PACKET_ID::kLOGIN_REQUEST] = &PacketManager::LoginHandler;
-	packet_handlers_[(int)REDIS_TASK_ID::kREQUEST_LOGIN] = &PacketManager::LoginDBResHandler;
+	packet_handlers_[(int)REDIS_TASK_ID::kRESPONSE_LOGIN] = &PacketManager::LoginDBResHandler;
 
 	if (redis_manager_.Init("127.0.0.1") == false) {
 		return;
@@ -30,11 +30,10 @@ void PacketManager::Run()
 
 void PacketManager::Terminate()
 {
-	is_thread_running_ = false;
+	redis_manager_.Terminate();
 
-	if (DestroyPacketProcessThread() == false) {
-		std::cout << "[DestroyPacketProcessThread] Failed to Destroy Process Thread\n";
-	}
+	is_thread_running_ = false;
+	DestroyPacketProcessThread();
 }
 
 bool PacketManager::EnqueuePacket(int32_t session_index, const char* p_data, DWORD len)
@@ -70,7 +69,7 @@ void PacketManager::PacketProcessThread()
 
 		if (auto pkt = DequeuePacket(); pkt.has_value()) {
 			idle = false;
-			ProcessPacket(*pkt);
+			ProcessPacket(*pkt, true);
 		}
 
 		if (auto pkt = DequeueSystemPacket(); pkt.has_value()) {
@@ -80,7 +79,8 @@ void PacketManager::PacketProcessThread()
 
 		if (auto task = redis_manager_.GetTaskRes(); task.has_value()) {
 			idle = false;
-			ProcessPacket(*task);
+			ProcessPacket(reinterpret_cast<PacketInfo&>(*task));
+			task->Release();
 		}
 
 		if (idle) {
@@ -89,17 +89,21 @@ void PacketManager::PacketProcessThread()
 	}
 }
 
-bool PacketManager::ProcessPacket(PacketInfo& pkt)
+bool PacketManager::ProcessPacket(PacketInfo& pkt, bool user_pkt)
 {
 	if (packet_handlers_.contains(pkt.id_)) {
 		(this->*(packet_handlers_[pkt.id_]))(pkt.session_index_, pkt.data_size_, pkt.data_);
-		// TODO user ringbuffer movefront
+
+		if (user_pkt) {
+			user_manager_.CompleteProcess(pkt.session_index_, pkt.data_size_);
+		}
+		return true;
 	}
 
 	return false;
 }
 
-bool PacketManager::DestroyPacketProcessThread()
+void PacketManager::DestroyPacketProcessThread()
 {
 	is_thread_running_ = false;
 
@@ -107,9 +111,6 @@ bool PacketManager::DestroyPacketProcessThread()
 	{
 		packet_process_thread_.join();
 	}
-
-	std::cout << "[DestroyPacketProcessThread] Packet Process Thread Destroyed\n";
-	return true;
 }
 
 std::optional<PacketInfo> PacketManager::DequeuePacket()
@@ -194,8 +195,8 @@ void PacketManager::LoginHandler(uint32_t session_idx, uint16_t data_size, char*
 	if (user_manager_.FindUserIndexByID(p_user_id) == -1)
 	{
 		RedisLoginReq login_db_pkt;
-		CopyMemory(login_db_pkt.UserID, p_login_pkt->UserID, (MAX_USER_ID_LEN + 1));
-		CopyMemory(login_db_pkt.UserPW, p_login_pkt->UserPW, (MAX_USER_PW_LEN + 1));
+		CopyMemory(login_db_pkt.UserID, p_login_pkt->UserID, (kMAX_USER_ID_LEN + 1));
+		CopyMemory(login_db_pkt.UserPW, p_login_pkt->UserPW, (kMAX_USER_PW_LEN + 1));
 
 		RedisTask task;
 		task.UserIndex = session_idx;

@@ -1,4 +1,5 @@
 #pragma once
+#include "constants.h"
 
 struct PacketInfo
 {
@@ -19,13 +20,11 @@ struct PACKET_HEADER
 const uint32_t PACKET_HEADER_LENGTH = sizeof(PACKET_HEADER);
 
 //- 로그인 요청
-const int MAX_USER_ID_LEN = 32;
-const int MAX_USER_PW_LEN = 32;
 
 struct LOGIN_REQUEST_PACKET : public PACKET_HEADER
 {
-	char UserID[MAX_USER_ID_LEN + 1];
-	char UserPW[MAX_USER_PW_LEN + 1];
+	char UserID[kMAX_USER_ID_LEN + 1];
+	char UserPW[kMAX_USER_PW_LEN + 1];
 };
 const size_t LOGIN_REQUEST_PACKET_SZIE = sizeof(LOGIN_REQUEST_PACKET);
 
@@ -64,10 +63,9 @@ struct ROOM_LEAVE_RESPONSE_PACKET : public PACKET_HEADER
 
 
 // 룸 채팅
-const int MAX_CHAT_MSG_SIZE = 256;
 struct ROOM_CHAT_REQUEST_PACKET : public PACKET_HEADER
 {
-	char Message[MAX_CHAT_MSG_SIZE + 1] = { 0, };
+	char Message[kMAX_CHAT_MSG_SIZE + 1] = { 0, };
 };
 
 struct ROOM_CHAT_RESPONSE_PACKET : public PACKET_HEADER
@@ -77,8 +75,8 @@ struct ROOM_CHAT_RESPONSE_PACKET : public PACKET_HEADER
 
 struct ROOM_CHAT_NOTIFY_PACKET : public PACKET_HEADER
 {
-	char UserID[MAX_USER_ID_LEN + 1] = { 0, };
-	char Msg[MAX_CHAT_MSG_SIZE + 1] = { 0, };
+	char UserID[kMAX_USER_ID_LEN + 1] = { 0, };
+	char Msg[kMAX_CHAT_MSG_SIZE + 1] = { 0, };
 };
 #pragma pack(pop) //위에 설정된 패킹설정이 사라짐
 

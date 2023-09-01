@@ -172,23 +172,15 @@ void Network::Terminate()
 /// </summary>
 void Network::DestroyThread()
 {
-	if (DestroyWorkerThread()) {
-		std::cout << "[DestroyThread] Worker Thread Destroyed\n";
-	}
-
-	if (DestroyAccepterThread()) {
-		std::cout << "[DestroyThread] Accepter Thread Destroyed\n";
-	}
-
-	if (DestroySenderThread()) {
-		std::cout << "[DestroyThread] Sender Thread Destroyed\n";
-	}
+	DestroyWorkerThread();
+	DestroyAccepterThread();
+	DestroySenderThread();
 }
 
 /// <summary>
 /// 워커 쓰레드를 모두 종료시킨다.
 /// </summary>
-bool Network::DestroyWorkerThread()
+void Network::DestroyWorkerThread()
 {
 	// 워커 쓰레드 종료
 	is_worker_running_ = false;
@@ -200,13 +192,13 @@ bool Network::DestroyWorkerThread()
 		}
 	}
 
-	return true;
+	std::cout << "[DestroyThread] Worker Thread Destroyed\n";
 }
 
 /// <summary>
 /// Accepter 쓰레드를 종료시킨다.
 /// </summary>
-bool Network::DestroyAccepterThread()
+void Network::DestroyAccepterThread()
 {
 	// Accepter 쓰레드 종료
 	is_accepter_running_ = false;
@@ -216,13 +208,13 @@ bool Network::DestroyAccepterThread()
 		accepter_thread_.join();
 	}
 
-	return true;
+	std::cout << "[DestroyThread] Accepter Thread Destroyed\n";
 }
 
 /// <summary>
 /// Sender 쓰레드를 종료시킨다.
 /// </summary>
-bool Network::DestroySenderThread()
+void Network::DestroySenderThread()
 {
 	// Sender 쓰레드 종료
 	is_sender_running_ = false;
@@ -231,7 +223,7 @@ bool Network::DestroySenderThread()
 		sender_thread_.join();
 	}
 
-	return true;
+	std::cout << "[DestroyThread] Sender Thread Destroyed\n";
 }
 
 /// <summary>
@@ -313,6 +305,7 @@ bool Network::BindRecv(Session* p_session)
 	DWORD flag = 0;
 	DWORD recved_bytes = 0;
 
+	// TODO : 세션에서 세팅하도록 옮기기
 	// 버퍼 정보 및 I/O Operation 타입 설정
 	SetRecvOverlappedEx(p_session);
 
@@ -347,6 +340,7 @@ void Network::SetRecvOverlappedEx(Session* p_session)
 /// </summary>
 void Network::WorkerThread()
 {
+	// TODO : while문 안으로 들어가도록 -> 코드 가독성 더 올리기
 	// CompletionKey
 	Session* p_session = NULL;
 
@@ -449,9 +443,9 @@ void Network::DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED
 
 		// IOCP에 바인드
 		if (BindIOCompletionPort(p_session)) {
-			p_session->Activate();
-
 			OnConnect(p_session->index_);
+
+			p_session->Activate();
 
 			// Recv 바인드
 			if (!BindRecv(p_session)) {
@@ -483,8 +477,12 @@ void Network::AccepterThread()
 			}
 
 			// 사용 가능한 시간인지 확인
+			if (static_cast<unsigned long long>(cur_time) < session->latest_conn_closed_) {
+				continue;
+			}
+
 			auto diff = cur_time - session->latest_conn_closed_;
-			if (diff < 0 || diff <= SESSION_REUSE_TIME) {
+			if (diff <= SESSION_REUSE_TIME) {
 				continue;
 			}
 

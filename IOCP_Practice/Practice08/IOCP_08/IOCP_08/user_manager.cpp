@@ -50,3 +50,13 @@ void UserManager::AddUser(const std::string& user_id, int32_t user_index)
 	user_obj_pool_[user_index]->SetLogin(user_id);
 	user_id_map_.insert({user_id, user_index});
 }
+
+void UserManager::CompleteProcess(uint32_t user_index, uint16_t pkt_size)
+{
+	auto user = GetUserByIndex(user_index);
+	if (user == nullptr) {
+		return;
+	}
+	
+	user->CompleteProcess(pkt_size);
+}

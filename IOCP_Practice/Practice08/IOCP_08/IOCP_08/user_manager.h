@@ -17,6 +17,7 @@ public:
 	void DeleteUserInfo(const std::string& user_id);
 	int32_t FindUserIndexByID(const std::string& user_id);
 	void AddUser(const std::string& user_id, int32_t user_index);
+	void CompleteProcess(uint32_t user_index, uint16_t pkt_size);
 
 	int32_t GetCurrentUserCnt() 
 	{

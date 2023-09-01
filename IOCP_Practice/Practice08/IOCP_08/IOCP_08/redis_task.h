@@ -1,8 +1,7 @@
 #pragma once
 #include "error_code.h"
+#include "constants.h"
 
-#define kMAX_USER_ID_LEN 20
-#define kMAX_USER_PW_LEN 20
 
 enum class REDIS_TASK_ID : uint16_t
 {

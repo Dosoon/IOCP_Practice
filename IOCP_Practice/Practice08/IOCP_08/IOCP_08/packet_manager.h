@@ -27,9 +27,9 @@ public:
 private:
 	std::function<void(uint32_t, char*, uint16_t)> SendPacketFunc;
 
-	bool ProcessPacket(PacketInfo& pkt);
+	bool ProcessPacket(PacketInfo& pkt, bool user_pkt = false);
 	void PacketProcessThread();
-	bool DestroyPacketProcessThread();
+	void DestroyPacketProcessThread();
 	std::optional<PacketInfo> DequeuePacket();
 	std::optional<PacketInfo> DequeueSystemPacket();
 
@@ -42,12 +42,11 @@ private:
 	void LoginHandler(uint32_t session_idx, uint16_t data_size, char* p_data);
 	void LoginDBResHandler(uint32_t session_idx, uint16_t data_size, char* p_data);
 
-	bool	is_thread_running_ = false;
+	bool			is_thread_running_ = false;
+	std::thread		packet_process_thread_;
 
 	typedef void(PacketManager::* PROCESS_RECV_PACKET_FUNCTION)(uint32_t, uint16_t, char*);
 	std::unordered_map<int32_t, PROCESS_RECV_PACKET_FUNCTION> packet_handlers_;
-
-	std::thread				packet_process_thread_;
 
 	Concurrency::concurrent_queue<int32_t>		incoming_packet_user_index_queue_;
 	Concurrency::concurrent_queue<PacketInfo>		system_packet_queue_;

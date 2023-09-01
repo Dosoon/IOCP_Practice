@@ -18,6 +18,11 @@ void User::SetLogin(const std::string& user_id)
     user_id_ = user_id;
 }
 
+void User::CompleteProcess(uint16_t pkt_size)
+{
+    packet_buf_.MoveFront(pkt_size);
+}
+
 std::optional<PacketInfo> User::GetPacketData()
 {
     PACKET_HEADER header;

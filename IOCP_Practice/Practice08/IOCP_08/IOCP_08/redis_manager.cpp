@@ -7,6 +7,7 @@ bool RedisManager::Init(std::string ip, uint16_t port)
 		return false;
 	}
 
+	std::cout << "[RedisManager] Connected to Redis Server\n";
 	task_handlers_[(int)REDIS_TASK_ID::kREQUEST_LOGIN] = &RedisManager::LoginHandler;
 
 	return true;
@@ -15,6 +16,13 @@ bool RedisManager::Init(std::string ip, uint16_t port)
 void RedisManager::Run(const int32_t max_thread_cnt)
 {
 	is_running_ = true;
+
+	worker_list_.reserve(max_thread_cnt);
+
+	for (auto i = 0; i < max_thread_cnt; i++)
+	{
+		worker_list_.emplace_back([this]() { ProcessTaskThread(); });
+	}
 }
 
 void RedisManager::Terminate()
@@ -51,26 +59,23 @@ void RedisManager::LoginHandler(uint32_t session_idx, uint16_t data_size, char* 
 	RedisLoginRes res_login_pkt;
 	res_login_pkt.Result = (UINT16)ERROR_CODE::kLOGIN_USER_INVALID_PW;
 
-	std::string value;
-	// TODO : RedisClient에 맞게 수정
-	//if (mConn.get(p_login_pkt->UserID, value))
-	//{
-	//	res_login_pkt.Result = (UINT16)ERROR_CODE::NONE;
+	std::string redis_pw;
+	if (redis_client_.Get(p_login_pkt->UserID, &redis_pw) == RC_SUCCESS) {
 
-	//	if (value.compare(p_login_pkt->UserPW) == 0)
-	//	{
-	//		res_login_pkt.Result = (UINT16)ERROR_CODE::NONE;
-	//	}
-	//}
+		if (redis_pw.compare(p_login_pkt->UserPW) == 0) {
+			res_login_pkt.Result = static_cast<uint16_t>(ERROR_CODE::kNONE);
+		}
+	}
 
-	//RedisTask resTask;
-	//resTask.UserIndex = task.UserIndex;
-	//resTask.TaskID = RedisTaskID::RESPONSE_LOGIN;
-	//resTask.DataSize = sizeof(RedisLoginRes);
-	//resTask.pData = new char[resTask.DataSize];
-	//CopyMemory(resTask.pData, (char*)&res_login_pkt, resTask.DataSize);
+	// 응답 전송
+	RedisTask res_task;
+	res_task.UserIndex = session_idx;
+	res_task.TaskID = REDIS_TASK_ID::kRESPONSE_LOGIN;
+	res_task.DataSize = sizeof(RedisLoginRes);
+	res_task.pData = new char[res_task.DataSize];
+	CopyMemory(res_task.pData, (char*)&res_login_pkt, res_task.DataSize);
 
-	//PushResponse(resTask);
+	PushTaskRes(res_task);
 }
 
 bool RedisManager::Connect(std::string ip, uint16_t port)

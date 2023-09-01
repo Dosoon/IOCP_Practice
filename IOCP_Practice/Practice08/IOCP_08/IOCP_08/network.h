@@ -89,9 +89,9 @@ private:
 	void DispatchOverlapped(Session* p_session, DWORD io_size, LPOVERLAPPED p_overlapped);
 	bool CheckGQCSResult(Session* p_session, bool gqcs_ret, DWORD io_size, LPOVERLAPPED p_overlapped);
 
-	bool DestroyWorkerThread();
-	bool DestroyAccepterThread();
-	bool DestroySenderThread();
+	void DestroyWorkerThread();
+	void DestroyAccepterThread();
+	void DestroySenderThread();
 
 	bool ErrorHandler(bool result, int32_t error_code, const char* method, int32_t allow_codes, ...);
 	bool ErrorHandler(int32_t socket_result, int32_t error_code, const char* method, int32_t allow_codes, ...);

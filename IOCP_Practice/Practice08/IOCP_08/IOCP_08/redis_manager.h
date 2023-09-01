@@ -32,7 +32,8 @@ private:
 
 	CRedisClient redis_client_;
 
-	bool	is_running_ = false;
+	bool			is_running_ = false;
+	std::thread		task_process_thread_;
 
 	typedef void(RedisManager::* REDIS_TASK_FUNCTION)(uint32_t, uint16_t, char*);
 	std::unordered_map<uint16_t, REDIS_TASK_FUNCTION> task_handlers_;
