@@ -1100,7 +1100,7 @@ int CRedisClient::Ttl(const std::string &strKey, long *pnVal, Pipeline ppLine)
     return ExecuteImpl("ttl", strKey, HASH_SLOT(strKey), ppLine, BIND_INT(pnVal));
 }
 
-int CRedisClient::Type(const std::string &strKey, std::string *pstrVal, Pipeline ppLine)
+int CRedisClient::type_(const std::string &strKey, std::string *pstrVal, Pipeline ppLine)
 {
     return ExecuteImpl("type", strKey, HASH_SLOT(strKey), ppLine, BIND_STR(pstrVal));
 }

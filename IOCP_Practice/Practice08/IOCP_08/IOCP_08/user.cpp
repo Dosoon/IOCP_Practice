@@ -30,12 +30,12 @@ std::optional<PacketInfo> User::GetPacketData()
         return {};
     }
 
-    if (packet_buf_.GetSizeInUse() >= header.PacketLength) {
+    if (packet_buf_.GetSizeInUse() >= header.packet_length_) {
 
         return PacketInfo {
             .session_index_ = static_cast<uint32_t>(session_idx_),
-            .id_ = header.PacketId,
-            .data_size_ = header.PacketLength,
+            .id_ = header.id_,
+            .data_size_ = header.packet_length_,
             .data_ = packet_buf_.GetFrontBufferPtr()
         };
     }

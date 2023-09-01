@@ -44,5 +44,5 @@ private:
 	std::vector<std::thread> worker_list_;
 	Concurrency::concurrent_queue<RedisTask> task_req_queue_;
 	Concurrency::concurrent_queue<RedisTask> task_res_queue_;
-	UserManager* p_user_manager_;
+	UserManager* p_ref_user_manager_;
 };

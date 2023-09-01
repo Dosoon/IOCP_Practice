@@ -31,13 +31,13 @@ struct RedisTask
 
 struct RedisLoginReq
 {
-	char UserID[kMAX_USER_ID_LEN + 1];
-	char UserPW[kMAX_USER_PW_LEN + 1];
+	char user_id_[kMAX_USER_ID_LEN + 1];
+	char user_pw_[kMAX_USER_PW_LEN + 1];
 };
 
 struct RedisLoginRes
 {
-	uint16_t Result = (uint16_t)ERROR_CODE::kNONE;
+	uint16_t result_ = (uint16_t)ERROR_CODE::kNONE;
 };
 
 #pragma pack(pop)

@@ -8,8 +8,8 @@
 // Packet에 대한 concept 정의
 template <typename T>
 concept Packet = requires(T t) {
-	{ t.PacketId } -> std::convertible_to<uint16_t>;
-	{ t.PacketLength } -> std::convertible_to<uint16_t>;
+	{ t.id_ } -> std::convertible_to<uint16_t>;
+	{ t.packet_length_ } -> std::convertible_to<uint16_t>;
 };
 
 template <Packet Pkt>
@@ -17,8 +17,8 @@ Pkt SetPacketIdAndLen(PACKET_ID id)
 {
 	Pkt pkt;
 
-	pkt.PacketId = static_cast<uint16_t>(id);
-	pkt.PacketLength = sizeof(Pkt);
+	pkt.id_ = static_cast<uint16_t>(id);
+	pkt.packet_length_ = sizeof(Pkt);
 
 	return pkt;
 };

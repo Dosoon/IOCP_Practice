@@ -239,7 +239,7 @@ public:
     int Restore(const std::string &strKey, long nTtl, const std::string &strVal, Pipeline ppLine = nullptr);
     int Scan(long *pnCursor, const std::string &strPattern, long nCount, std::vector<std::string> *pvecVal);
     int Ttl(const std::string &strKey, long *pnVal, Pipeline ppLine = nullptr);
-    int Type(const std::string &strKey, std::string *pstrVal, Pipeline ppLine = nullptr);
+    int type_(const std::string &strKey, std::string *pstrVal, Pipeline ppLine = nullptr);
 
     /* interfaces for string */
     int Append(const std::string &strKey, const std::string &strVal, long *pnVal = nullptr, Pipeline ppLine = nullptr);

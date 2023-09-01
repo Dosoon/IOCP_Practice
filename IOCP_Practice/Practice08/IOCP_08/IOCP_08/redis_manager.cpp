@@ -27,7 +27,7 @@ void RedisManager::Run(const int32_t max_thread_cnt)
 
 bool RedisManager::Start(UserManager* user_manager, int32_t thread_cnt)
 {
-	p_user_manager_ = user_manager;
+	p_ref_user_manager_ = user_manager;
 
 	if (Init() == false) {
 		return false;
@@ -72,14 +72,14 @@ void RedisManager::LoginHandler(uint32_t session_idx, uint16_t data_size, char* 
 	auto p_login_pkt = (RedisLoginReq*)p_data;
 
 	RedisLoginRes res_login_pkt;
-	res_login_pkt.Result = (UINT16)ERROR_CODE::kLOGIN_USER_INVALID_PW;
+	res_login_pkt.result_ = (UINT16)ERROR_CODE::kLOGIN_USER_INVALID_PW;
 
 	std::string redis_pw;
-	if (redis_client_.Get(p_login_pkt->UserID, &redis_pw) == RC_SUCCESS) {
+	if (redis_client_.Get(p_login_pkt->user_id_, &redis_pw) == RC_SUCCESS) {
 
-		if (redis_pw.compare(p_login_pkt->UserPW) == 0) {
-			p_user_manager_->SetUserID(session_idx, p_login_pkt->UserID);
-			res_login_pkt.Result = static_cast<uint16_t>(ERROR_CODE::kNONE);
+		if (redis_pw.compare(p_login_pkt->user_pw_) == 0) {
+			p_ref_user_manager_->SetUserID(session_idx, p_login_pkt->user_id_);
+			res_login_pkt.result_ = static_cast<uint16_t>(ERROR_CODE::kNONE);
 		}
 	}
 
