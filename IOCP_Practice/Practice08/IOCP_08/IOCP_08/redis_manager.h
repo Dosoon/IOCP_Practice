@@ -8,13 +8,14 @@
 #include <optional>
 
 #include "redis_task.h"
+#include "user_manager.h"
 
 #include "RedisClient.hpp"
 
 class RedisManager
 {
 public:
-	bool Start(int32_t thread_cnt = 1);
+	bool Start(UserManager* user_manager, int32_t thread_cnt = 1);
 	void Terminate();
 
 	void PushTaskReq(RedisTask task);
@@ -43,4 +44,5 @@ private:
 	std::vector<std::thread> worker_list_;
 	Concurrency::concurrent_queue<RedisTask> task_req_queue_;
 	Concurrency::concurrent_queue<RedisTask> task_res_queue_;
+	UserManager* p_user_manager_;
 };

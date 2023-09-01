@@ -25,8 +25,10 @@ void RedisManager::Run(const int32_t max_thread_cnt)
 	}
 }
 
-bool RedisManager::Start(int32_t thread_cnt)
+bool RedisManager::Start(UserManager* user_manager, int32_t thread_cnt)
 {
+	p_user_manager_ = user_manager;
+
 	if (Init() == false) {
 		return false;
 	}
@@ -45,6 +47,8 @@ void RedisManager::Terminate()
 			worker.join();
 		}
 	}
+
+	std::cout << "[DestroyThread] Redis TaskProcess Thread Destroyed\n";
 }
 
 void RedisManager::PushTaskReq(RedisTask task)
@@ -74,6 +78,7 @@ void RedisManager::LoginHandler(uint32_t session_idx, uint16_t data_size, char* 
 	if (redis_client_.Get(p_login_pkt->UserID, &redis_pw) == RC_SUCCESS) {
 
 		if (redis_pw.compare(p_login_pkt->UserPW) == 0) {
+			p_user_manager_->SetUserID(session_idx, p_login_pkt->UserID);
 			res_login_pkt.Result = static_cast<uint16_t>(ERROR_CODE::kNONE);
 		}
 	}

@@ -150,6 +150,7 @@
     <ClInclude Include="network.h" />
     <ClInclude Include="overlapped_ex_define.h" />
     <ClInclude Include="packet.h" />
+    <ClInclude Include="packet_generator.h" />
     <ClInclude Include="packet_id.h" />
     <ClInclude Include="packet_manager.h" />
     <ClInclude Include="RedisClient.hpp" />

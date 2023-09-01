@@ -16,8 +16,7 @@
 class PacketManager
 {
 public:
-	void Init(const int32_t max_user_cnt, const int32_t redis_thread_cnt);
-	void Run();
+	void Start(const int32_t max_user_cnt, const int32_t redis_thread_cnt);
 	void Terminate();
 
 	bool EnqueuePacket(int32_t session_index, const char* p_data, DWORD len);
@@ -25,6 +24,8 @@ public:
 	void SetSendPacket(std::function<void(uint32_t, char*, uint16_t)> send_packet);
 
 private:
+	void Init(const int32_t max_user_cnt, const int32_t redis_thread_cnt);
+	void Run();
 	std::function<void(uint32_t, char*, uint16_t)> SendPacketFunc;
 
 	void BindHandler();

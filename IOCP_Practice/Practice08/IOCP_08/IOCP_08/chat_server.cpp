@@ -20,8 +20,7 @@ bool ChatServer::Start(uint16_t port, int32_t max_session_cnt, int32_t session_b
 		return false;
 	}
 
-	packet_manager_.Init(max_session_cnt, redis_thread_cnt);
-	packet_manager_.Run();
+	packet_manager_.Start(max_session_cnt, redis_thread_cnt);
 
 	std::cout << "[StartServer] Server Started\n";
 	return true;
