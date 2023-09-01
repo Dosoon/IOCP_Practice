@@ -23,6 +23,18 @@ void User::CompleteProcess(uint16_t pkt_size)
     packet_buf_.MoveFront(pkt_size);
 }
 
+void User::EnterRoom(int32_t room_idx)
+{
+    room_idx_ = room_idx;
+    domain_state_ = DOMAIN_STATE::kROOM;
+}
+
+void User::LeaveRoom()
+{
+    room_idx_ = -1;
+    domain_state_ = DOMAIN_STATE::kLOGIN;
+}
+
 std::optional<PacketInfo> User::GetPacketData()
 {
     PACKET_HEADER header;

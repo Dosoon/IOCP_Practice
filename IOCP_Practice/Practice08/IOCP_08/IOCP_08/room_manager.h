@@ -9,6 +9,8 @@
 class RoomManager
 {
 public:
+	~RoomManager();
+
 	void Init(const int32_t begin_room_num, const int32_t max_room_cnt, const int32_t max_user_cnt);
 
 	// ------------------------------
@@ -20,14 +22,19 @@ public:
 		return max_room_cnt_;
 	}
 
-	ERROR_CODE EnterRoom(User* p_user, const int32_t room_num);
-	ERROR_CODE LeaveRoom(User* p_user, const int32_t room_num);
+	void SetSendPacket(std::function<void(uint32_t, char*, uint16_t)> send_packet);
 
 	Room* GetRoomByIdx(const int32_t room_idx);
 
-	std::function<void(uint32_t, char*, uint16_t)> SendPacketFunc;
+	// ------------------------------
+	// RoomManager ·ÎÁ÷
+	// ------------------------------
+
+	ERROR_CODE EnterRoom(User* p_user, const int32_t room_idx);
+	ERROR_CODE LeaveRoom(User* p_user, const int32_t room_idx);
 
 private:
+	std::function<void(uint32_t, char*, uint16_t)> SendPacketFunc;
 
 	std::vector<Room*> room_list_;
 	int32_t begin_room_num_ = 0;

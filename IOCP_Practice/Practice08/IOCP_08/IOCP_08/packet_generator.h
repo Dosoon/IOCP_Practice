@@ -4,6 +4,7 @@
 #include <type_traits>
 
 #include "redis_task.h"
+#include "packet_id.h"
 
 // Packet에 대한 concept 정의
 template <typename T>

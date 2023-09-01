@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <functional>
 
 #include "user.h"
 #include "error_code.h"
@@ -20,6 +21,8 @@ public:
 		return room_idx_;
 	}
 
+	void SetSendPacket(std::function<void(uint32_t, char*, uint16_t)> send_packet);
+
 	// ------------------------------
 	// Room ·ÎÁ÷
 	// ------------------------------
@@ -29,7 +32,9 @@ public:
 	void NotifyChat(int32_t user_idx, const char* p_user_id, const char* p_msg);
 
 private:
-	void BroadcastMsg(const char* p_data, const int32_t len, int32_t pass_user_idx, bool except_me);
+	std::function<void(uint32_t, char*, uint16_t)> SendPacketFunc;
+
+	void BroadcastMsg(char* p_data, const uint16_t len, uint32_t pass_user_idx, bool except_me);
 
 	int32_t room_idx_ = -1;
 

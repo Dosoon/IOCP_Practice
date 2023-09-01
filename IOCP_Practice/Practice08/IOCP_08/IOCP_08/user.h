@@ -24,6 +24,8 @@ public:
 	void Clear();
 	void SetLogin(const std::string& user_id);
 	void CompleteProcess(uint16_t pkt_size);
+	void EnterRoom(int32_t room_idx);
+	void LeaveRoom();
 
 	// ------------------------------
 	// Getter & Setter
