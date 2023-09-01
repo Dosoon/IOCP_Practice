@@ -14,7 +14,7 @@ struct PACKET_HEADER
 {
 	uint16_t packet_length_;
 	uint16_t id_;
-	uint8_t Type; //압축여부 암호화여부 등 속성을 알아내는 값
+	uint8_t type_; //압축여부 암호화여부 등 속성을 알아내는 값
 };
 
 const uint32_t PACKET_HEADER_LENGTH = sizeof(PACKET_HEADER);

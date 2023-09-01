@@ -7,6 +7,7 @@
 #include "error_code.h"
 #include "redis_task.h"
 #include "packet_generator.h"
+#include "constants.h"
 
 void PacketManager::Init(const int32_t max_user_cnt, const int32_t redis_thread_cnt)
 {
@@ -15,6 +16,7 @@ void PacketManager::Init(const int32_t max_user_cnt, const int32_t redis_thread_
 	BindHandler();
 
 	redis_manager_.Start(&user_manager_, redis_thread_cnt);
+	room_manager_.Init(kSTART_ROOM_NUMBER, kMAX_ROOM_COUNT, kMAX_ROOM_USER_COUNT);
 }
 
 void PacketManager::Run()
@@ -163,29 +165,29 @@ std::optional<PacketInfo> PacketManager::DequeueSystemPacket()
 void PacketManager::ConnectHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
 {
 	std::cout << "Connect Handler\n";
-	auto user = user_manager_.GetUserByIndex(session_idx);
+	auto p_user = user_manager_.GetUserByIndex(session_idx);
 
-	if (user == nullptr) {
+	if (p_user == nullptr) {
 		std::cout << "[Error] ConnectHandler :: Invalid User Index\n";
 		return;
 	}
 	
-	user->Clear();
+	p_user->Clear();
 }
 
 void PacketManager::DisconnectHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
 {
 	std::cout << "Disonnect Handler\n";
-	auto user = user_manager_.GetUserByIndex(session_idx);
+	auto p_user = user_manager_.GetUserByIndex(session_idx);
 
-	if (user == nullptr) {
+	if (p_user == nullptr) {
 		std::cout << "[Error] DisconnectHandler :: Invalid User Index\n";
 		return;
 	}
 
-	if (user->GetDomainState() != User::DOMAIN_STATE::kNONE)
+	if (p_user->GetDomainState() != User::DOMAIN_STATE::kNONE)
 	{
-		user_manager_.DeleteUserInfo(user->GetUserID());
+		user_manager_.DeleteUserInfo(p_user->GetUserID());
 	}
 }
 
@@ -202,7 +204,7 @@ void PacketManager::LoginHandler(uint32_t session_idx, uint16_t data_size, char*
 	// 접속자 수가 최대 인원을 초과했다면 실패
 	if (user_manager_.GetCurrentUserCnt() >= user_manager_.GetMaxUserCnt())
 	{
-		res_login_pkt.result_ = (uint16_t)ERROR_CODE::kLOGIN_USER_USED_ALL_OBJ;
+		res_login_pkt.result_ = static_cast<int16_t>(ERROR_CODE::kLOGIN_USER_USED_ALL_OBJ);
 		SendPacketFunc(session_idx, (char*)&res_login_pkt, sizeof(res_login_pkt));
 		return;
 	}
@@ -221,7 +223,7 @@ void PacketManager::LoginHandler(uint32_t session_idx, uint16_t data_size, char*
 	else
 	{
 		// 이미 접속중인 경우
-		res_login_pkt.result_ = (uint16_t)ERROR_CODE::kLOGIN_USER_ALREADY;
+		res_login_pkt.result_ = static_cast<int16_t>(ERROR_CODE::kLOGIN_USER_ALREADY);
 		SendPacketFunc(session_idx, (char*)&res_login_pkt, sizeof(res_login_pkt));
 	}
 }
@@ -232,7 +234,7 @@ void PacketManager::LoginDBResHandler(uint32_t session_idx, uint16_t data_size, 
 
 	auto login_db_res_pkt = *reinterpret_cast<RedisLoginRes*>(p_data);
 
-	if (login_db_res_pkt.result_ == (uint16_t)ERROR_CODE::kNONE) {
+	if (login_db_res_pkt.result_ == static_cast<int16_t>(ERROR_CODE::kNONE)) {
 		user_manager_.SetUserLogin(session_idx);
 	}
 
@@ -240,23 +242,81 @@ void PacketManager::LoginDBResHandler(uint32_t session_idx, uint16_t data_size, 
 	auto login_res_pkt = SetPacketIdAndLen<LOGIN_RESPONSE_PACKET>(PACKET_ID::kLOGIN_RESPONSE);
 	login_res_pkt.result_ = login_db_res_pkt.result_;
 
-	SendPacketFunc(session_idx, (char*)&login_res_pkt, sizeof(LOGIN_RESPONSE_PACKET));
+	SendPacketFunc(session_idx, (char*)&login_res_pkt, sizeof(login_res_pkt));
 }
 
 void PacketManager::EnterRoomHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
 {
 	auto enter_room_pkt = *reinterpret_cast<ROOM_ENTER_REQUEST_PACKET*>(p_data);
-	auto req_user = user_manager_.GetUserByIndex(session_idx);
+	auto enter_res_pkt = SetPacketIdAndLen<ROOM_ENTER_RESPONSE_PACKET>
+										  (PACKET_ID::kROOM_ENTER_RESPONSE);
+	auto p_req_user = user_manager_.GetUserByIndex(session_idx);
 
-	// UNDONE
+	if (p_req_user == nullptr) {
+		return;
+	}
+
+	// 유저의 Domain State 확인
+	if (p_req_user->GetDomainState() != User::DOMAIN_STATE::kLOGIN) {
+		enter_res_pkt.result_ = static_cast<int16_t>(ERROR_CODE::kENTER_ROOM_NOT_USED_STATUS);
+
+		SendPacketFunc(session_idx, (char*)&enter_res_pkt, sizeof(enter_res_pkt));
+		return;
+	}
+
+	auto enter_result = room_manager_.EnterRoom(p_req_user, enter_room_pkt.room_number_);
+	enter_res_pkt.result_ = static_cast<int16_t>(enter_result);
+
+	SendPacketFunc(session_idx, (char*)&enter_res_pkt, sizeof(enter_res_pkt));
 }
 
 void PacketManager::LeaveRoomHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
 {
-	// UNDONE
+	auto leave_room_pkt = *reinterpret_cast<ROOM_LEAVE_REQUEST_PACKET*>(p_data);
+	auto leave_res_pkt = SetPacketIdAndLen<ROOM_LEAVE_RESPONSE_PACKET>
+										  (PACKET_ID::kROOM_LEAVE_RESPONSE);
+	auto p_req_user = user_manager_.GetUserByIndex(session_idx);
+
+	if (p_req_user == nullptr) {
+		return;
+	}
+
+	// 유저의 Domain State 확인
+	if (p_req_user->GetDomainState() != User::DOMAIN_STATE::kROOM) {
+		leave_res_pkt.result_ = static_cast<int16_t>(ERROR_CODE::kUSER_NOT_IN_ROOM);
+
+		SendPacketFunc(session_idx, (char*)&leave_res_pkt, sizeof(leave_res_pkt));
+		return;
+	}
+
+	leave_res_pkt.result_ = static_cast<int16_t>(room_manager_.LeaveRoom(p_req_user));
+
+	SendPacketFunc(session_idx, (char*)&leave_res_pkt, sizeof(leave_res_pkt));
 }
 
 void PacketManager::RoomChatHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
 {
-	// UNDONE
+	auto chat_pkt = *reinterpret_cast<ROOM_CHAT_REQUEST_PACKET*>(p_data);
+	auto chat_res_pkt = SetPacketIdAndLen<ROOM_CHAT_RESPONSE_PACKET>
+										 (PACKET_ID::kROOM_CHAT_RESPONSE);
+	chat_res_pkt.result_ = static_cast<int16_t>(ERROR_CODE::kNONE);
+
+	auto p_req_user = user_manager_.GetUserByIndex(session_idx);
+
+	if (p_req_user == nullptr || p_req_user->GetDomainState() != User::DOMAIN_STATE::kROOM) {
+		return;
+	}
+
+	auto room_idx = p_req_user->GetRoomIdx();
+	auto p_room = room_manager_.GetRoomByIdx(room_idx);
+
+	if (p_room == nullptr) {
+		chat_res_pkt.result_ = static_cast<int16_t>(ERROR_CODE::kCHAT_ROOM_INVALID_ROOM_NUMBER);
+		SendPacketFunc(session_idx, (char*)&chat_res_pkt, sizeof(chat_res_pkt));
+		return;
+	}
+
+	SendPacketFunc(session_idx, (char*)&chat_res_pkt, sizeof(chat_res_pkt));
+
+	p_room->NotifyChat(p_req_user->GetSessionIdx(), p_req_user->GetUserID().c_str(), chat_pkt.msg_);
 }

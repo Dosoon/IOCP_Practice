@@ -47,8 +47,9 @@ ERROR_CODE RoomManager::EnterRoom(User* p_user, const int32_t room_idx)
 	return p_room->EnterUser(p_user);
 }
 
-ERROR_CODE RoomManager::LeaveRoom(User* p_user, const int32_t room_idx)
+ERROR_CODE RoomManager::LeaveRoom(User* p_user)
 {
+	auto room_idx = p_user->GetRoomIdx();
 	auto p_room = GetRoomByIdx(room_idx);
 
 	if (p_room == nullptr) {

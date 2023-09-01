@@ -12,6 +12,7 @@
 #include "user_manager.h"
 #include "packet_handler/handler.h"
 #include "redis_manager.h"
+#include "room_manager.h"
 
 class PacketManager
 {
@@ -59,4 +60,5 @@ private:
 
 	UserManager				user_manager_;
 	RedisManager			redis_manager_;
+	RoomManager				room_manager_;
 };
