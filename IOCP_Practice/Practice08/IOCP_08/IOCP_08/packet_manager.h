@@ -44,6 +44,9 @@ private:
 	void DisconnectHandler(uint32_t session_idx, uint16_t data_size, char* p_data);
 	void LoginHandler(uint32_t session_idx, uint16_t data_size, char* p_data);
 	void LoginDBResHandler(uint32_t session_idx, uint16_t data_size, char* p_data);
+	void EnterRoomHandler(uint32_t session_idx, uint16_t data_size, char* p_data);
+	void LeaveRoomHandler(uint32_t session_idx, uint16_t data_size, char* p_data);
+	void RoomChatHandler(uint32_t session_idx, uint16_t data_size, char* p_data);
 
 	bool			is_thread_running_ = false;
 	std::thread		packet_process_thread_;

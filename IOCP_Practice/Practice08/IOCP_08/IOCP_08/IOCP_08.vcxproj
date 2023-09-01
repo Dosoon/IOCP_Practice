@@ -139,6 +139,8 @@
     <ClCompile Include="RedisClient.cpp" />
     <ClCompile Include="redis_manager.cpp" />
     <ClCompile Include="ring_buffer.cpp" />
+    <ClCompile Include="room.cpp" />
+    <ClCompile Include="room_manager.cpp" />
     <ClCompile Include="session.cpp" />
     <ClCompile Include="user.cpp" />
     <ClCompile Include="user_manager.cpp" />
@@ -157,6 +159,8 @@
     <ClInclude Include="redis_manager.h" />
     <ClInclude Include="redis_task.h" />
     <ClInclude Include="ring_buffer.h" />
+    <ClInclude Include="room.h" />
+    <ClInclude Include="room_manager.h" />
     <ClInclude Include="session.h" />
     <ClInclude Include="user.h" />
     <ClInclude Include="user_manager.h" />

@@ -99,6 +99,10 @@ void PacketManager::BindHandler()
 
 	packet_handlers_[(int)PACKET_ID::kLOGIN_REQUEST] = &PacketManager::LoginHandler;
 	packet_handlers_[(int)REDIS_TASK_ID::kRESPONSE_LOGIN] = &PacketManager::LoginDBResHandler;
+
+	packet_handlers_[(int)PACKET_ID::kROOM_ENTER_REQUEST] = &PacketManager::EnterRoomHandler;
+	packet_handlers_[(int)PACKET_ID::kROOM_LEAVE_REQUEST] = &PacketManager::LeaveRoomHandler;
+	packet_handlers_[(int)PACKET_ID::kROOM_CHAT_REQUEST] = &PacketManager::RoomChatHandler;
 }
 
 bool PacketManager::ProcessPacket(PacketInfo& pkt, bool user_pkt)
@@ -237,4 +241,22 @@ void PacketManager::LoginDBResHandler(uint32_t session_idx, uint16_t data_size, 
 	login_res_pkt.result_ = login_db_res_pkt.result_;
 
 	SendPacketFunc(session_idx, (char*)&login_res_pkt, sizeof(LOGIN_RESPONSE_PACKET));
+}
+
+void PacketManager::EnterRoomHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
+{
+	auto enter_room_pkt = *reinterpret_cast<ROOM_ENTER_REQUEST_PACKET*>(p_data);
+	auto req_user = user_manager_.GetUserByIndex(session_idx);
+
+	// UNDONE
+}
+
+void PacketManager::LeaveRoomHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
+{
+	// UNDONE
+}
+
+void PacketManager::RoomChatHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
+{
+	// UNDONE
 }
