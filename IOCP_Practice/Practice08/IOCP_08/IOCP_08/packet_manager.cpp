@@ -9,14 +9,25 @@
 #include "packet_generator.h"
 #include "constants.h"
 
-void PacketManager::Init(const int32_t max_user_cnt, const int32_t redis_thread_cnt)
+void PacketManager::Init(const int32_t max_user_cnt, const int32_t redis_thread_cnt,
+						 RoomManager* p_ref_room_manager, UserManager* p_ref_user_manager,
+						 RedisManager* p_ref_redis_manager)
 {
-	user_manager_.Init(max_user_cnt);
+	SetManagers(p_ref_room_manager, p_ref_user_manager, p_ref_redis_manager);
+
+	p_ref_user_manager_->Init(max_user_cnt);
 
 	BindHandler();
 
-	redis_manager_.Start(&user_manager_, redis_thread_cnt);
-	room_manager_.Init(kSTART_ROOM_NUMBER, kMAX_ROOM_COUNT, kMAX_ROOM_USER_COUNT);
+	p_ref_redis_manager_->Start(p_ref_user_manager_, redis_thread_cnt);
+	p_ref_room_manager_->Init(kSTART_ROOM_NUMBER, kMAX_ROOM_COUNT, kMAX_ROOM_USER_COUNT);
+}
+
+void PacketManager::SetManagers(RoomManager* p_ref_room_manager, UserManager* p_ref_user_manager, RedisManager* p_ref_redis_manager)
+{
+	p_ref_room_manager_ = p_ref_room_manager;
+	p_ref_user_manager_ = p_ref_user_manager;
+	p_ref_redis_manager_ = p_ref_redis_manager;
 }
 
 void PacketManager::Run()
@@ -24,15 +35,18 @@ void PacketManager::Run()
 	packet_process_thread_ = std::thread([this]() { PacketProcessThread(); });
 }
 
-void PacketManager::Start(const int32_t max_user_cnt, const int32_t redis_thread_cnt)
+void PacketManager::Start(const int32_t max_user_cnt, const int32_t redis_thread_cnt,
+						  RoomManager* p_ref_room_manager, UserManager* p_ref_user_manager,
+						  RedisManager* p_ref_redis_manager)
 {
-	Init(max_user_cnt, redis_thread_cnt);
+	Init(max_user_cnt, redis_thread_cnt,
+		 p_ref_room_manager, p_ref_user_manager, p_ref_redis_manager);
 	Run();
 }
 
 void PacketManager::Terminate()
 {
-	redis_manager_.Terminate();
+	p_ref_redis_manager_->Terminate();
 
 	is_thread_running_ = false;
 	DestroyPacketProcessThread();
@@ -40,7 +54,7 @@ void PacketManager::Terminate()
 
 bool PacketManager::EnqueuePacket(int32_t session_index, const char* p_data, DWORD len)
 {
-	auto user = user_manager_.GetUserByIndex(session_index);
+	auto user = p_ref_user_manager_->GetUserByIndex(session_index);
 	if (user == nullptr) {
 		return false;
 	}
@@ -79,7 +93,7 @@ void PacketManager::PacketProcessThread()
 			ProcessPacket(*pkt);
 		}
 
-		if (auto task = redis_manager_.GetTaskRes(); task.has_value()) {
+		if (auto task = p_ref_redis_manager_->GetTaskRes(); task.has_value()) {
 			idle = false;
 			ProcessPacket(reinterpret_cast<PacketInfo&>(*task));
 			task->Release();
@@ -113,7 +127,7 @@ bool PacketManager::ProcessPacket(PacketInfo& pkt, bool user_pkt)
 		(this->*(packet_handlers_[pkt.id_]))(pkt.session_index_, pkt.data_size_, pkt.data_);
 
 		if (user_pkt) {
-			user_manager_.CompleteProcess(pkt.session_index_, pkt.data_size_);
+			p_ref_user_manager_->CompleteProcess(pkt.session_index_, pkt.data_size_);
 		}
 		return true;
 	}
@@ -137,7 +151,7 @@ std::optional<PacketInfo> PacketManager::DequeuePacket()
 {
 	if (int32_t user_idx; incoming_packet_user_index_queue_.try_pop(user_idx)) {
 
-		auto user = user_manager_.GetUserByIndex(user_idx);
+		auto user = p_ref_user_manager_->GetUserByIndex(user_idx);
 		if (user == nullptr) {
 			return {};
 		}
@@ -165,7 +179,7 @@ std::optional<PacketInfo> PacketManager::DequeueSystemPacket()
 void PacketManager::ConnectHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
 {
 	std::cout << "Connect Handler\n";
-	auto p_user = user_manager_.GetUserByIndex(session_idx);
+	auto p_user = p_ref_user_manager_->GetUserByIndex(session_idx);
 
 	if (p_user == nullptr) {
 		std::cout << "[Error] ConnectHandler :: Invalid User Index\n";
@@ -178,7 +192,7 @@ void PacketManager::ConnectHandler(uint32_t session_idx, uint16_t data_size, cha
 void PacketManager::DisconnectHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
 {
 	std::cout << "Disonnect Handler\n";
-	auto p_user = user_manager_.GetUserByIndex(session_idx);
+	auto p_user = p_ref_user_manager_->GetUserByIndex(session_idx);
 
 	if (p_user == nullptr) {
 		std::cout << "[Error] DisconnectHandler :: Invalid User Index\n";
@@ -187,7 +201,7 @@ void PacketManager::DisconnectHandler(uint32_t session_idx, uint16_t data_size, 
 
 	if (p_user->GetDomainState() != User::DOMAIN_STATE::kNONE)
 	{
-		user_manager_.DeleteUserInfo(p_user->GetUserID());
+		p_ref_user_manager_->DeleteUserInfo(p_user->GetUserID());
 	}
 }
 
@@ -202,7 +216,7 @@ void PacketManager::LoginHandler(uint32_t session_idx, uint16_t data_size, char*
 	auto res_login_pkt = SetPacketIdAndLen<LOGIN_RESPONSE_PACKET>(PACKET_ID::kLOGIN_RESPONSE);
 
 	// 접속자 수가 최대 인원을 초과했다면 실패
-	if (user_manager_.GetCurrentUserCnt() >= user_manager_.GetMaxUserCnt())
+	if (p_ref_user_manager_->GetCurrentUserCnt() >= p_ref_user_manager_->GetMaxUserCnt())
 	{
 		res_login_pkt.result_ = static_cast<int16_t>(ERROR_CODE::kLOGIN_USER_USED_ALL_OBJ);
 		SendPacketFunc(session_idx, (char*)&res_login_pkt, sizeof(res_login_pkt));
@@ -210,7 +224,7 @@ void PacketManager::LoginHandler(uint32_t session_idx, uint16_t data_size, char*
 	}
 
 	// UserID 필드로 접속 여부 확인
-	if (user_manager_.FindUserIndexByID(p_user_id) == -1)
+	if (p_ref_user_manager_->FindUserIndexByID(p_user_id) == -1)
 	{
 		// Redis Task 생성 후 Redis 요청 전송
 		RedisLoginReq login_db_task_body;
@@ -218,7 +232,7 @@ void PacketManager::LoginHandler(uint32_t session_idx, uint16_t data_size, char*
 		CopyMemory(login_db_task_body.user_pw_, login_pkt.user_pw_, (kMAX_USER_PW_LEN + 1));
 
 		auto task = SetTaskBody(session_idx, REDIS_TASK_ID::kREQUEST_LOGIN, login_db_task_body);
-		redis_manager_.PushTaskReq(task);
+		p_ref_redis_manager_->PushTaskReq(task);
 	}
 	else
 	{
@@ -235,7 +249,7 @@ void PacketManager::LoginDBResHandler(uint32_t session_idx, uint16_t data_size, 
 	auto login_db_res_pkt = *reinterpret_cast<RedisLoginRes*>(p_data);
 
 	if (login_db_res_pkt.result_ == static_cast<int16_t>(ERROR_CODE::kNONE)) {
-		user_manager_.SetUserLogin(session_idx);
+		p_ref_user_manager_->SetUserLogin(session_idx);
 	}
 
 	// 응답 생성 및 전송
@@ -250,7 +264,7 @@ void PacketManager::EnterRoomHandler(uint32_t session_idx, uint16_t data_size, c
 	auto enter_room_pkt = *reinterpret_cast<ROOM_ENTER_REQUEST_PACKET*>(p_data);
 	auto enter_res_pkt = SetPacketIdAndLen<ROOM_ENTER_RESPONSE_PACKET>
 										  (PACKET_ID::kROOM_ENTER_RESPONSE);
-	auto p_req_user = user_manager_.GetUserByIndex(session_idx);
+	auto p_req_user = p_ref_user_manager_->GetUserByIndex(session_idx);
 
 	if (p_req_user == nullptr) {
 		return;
@@ -264,7 +278,7 @@ void PacketManager::EnterRoomHandler(uint32_t session_idx, uint16_t data_size, c
 		return;
 	}
 
-	auto enter_result = room_manager_.EnterRoom(p_req_user, enter_room_pkt.room_number_);
+	auto enter_result = p_ref_room_manager_->EnterRoom(p_req_user, enter_room_pkt.room_number_);
 	enter_res_pkt.result_ = static_cast<int16_t>(enter_result);
 
 	SendPacketFunc(session_idx, (char*)&enter_res_pkt, sizeof(enter_res_pkt));
@@ -275,7 +289,7 @@ void PacketManager::LeaveRoomHandler(uint32_t session_idx, uint16_t data_size, c
 	auto leave_room_pkt = *reinterpret_cast<ROOM_LEAVE_REQUEST_PACKET*>(p_data);
 	auto leave_res_pkt = SetPacketIdAndLen<ROOM_LEAVE_RESPONSE_PACKET>
 										  (PACKET_ID::kROOM_LEAVE_RESPONSE);
-	auto p_req_user = user_manager_.GetUserByIndex(session_idx);
+	auto p_req_user = p_ref_user_manager_->GetUserByIndex(session_idx);
 
 	if (p_req_user == nullptr) {
 		return;
@@ -289,7 +303,7 @@ void PacketManager::LeaveRoomHandler(uint32_t session_idx, uint16_t data_size, c
 		return;
 	}
 
-	leave_res_pkt.result_ = static_cast<int16_t>(room_manager_.LeaveRoom(p_req_user));
+	leave_res_pkt.result_ = static_cast<int16_t>(p_ref_room_manager_->LeaveRoom(p_req_user));
 
 	SendPacketFunc(session_idx, (char*)&leave_res_pkt, sizeof(leave_res_pkt));
 }
@@ -301,14 +315,14 @@ void PacketManager::RoomChatHandler(uint32_t session_idx, uint16_t data_size, ch
 										 (PACKET_ID::kROOM_CHAT_RESPONSE);
 	chat_res_pkt.result_ = static_cast<int16_t>(ERROR_CODE::kNONE);
 
-	auto p_req_user = user_manager_.GetUserByIndex(session_idx);
+	auto p_req_user = p_ref_user_manager_->GetUserByIndex(session_idx);
 
 	if (p_req_user == nullptr || p_req_user->GetDomainState() != User::DOMAIN_STATE::kROOM) {
 		return;
 	}
 
 	auto room_idx = p_req_user->GetRoomIdx();
-	auto p_room = room_manager_.GetRoomByIdx(room_idx);
+	auto p_room = p_ref_room_manager_->GetRoomByIdx(room_idx);
 
 	if (p_room == nullptr) {
 		chat_res_pkt.result_ = static_cast<int16_t>(ERROR_CODE::kCHAT_ROOM_INVALID_ROOM_NUMBER);

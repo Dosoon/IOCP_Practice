@@ -32,7 +32,6 @@ public:
 	void NotifyChat(int32_t user_idx, const char* p_user_id, const char* p_msg);
 
 private:
-	// TODO : ¿≠¥‹ø°º≠ Bind«ÿ¡‡æﬂ «‘
 	std::function<void(uint32_t, char*, uint16_t)> SendPacketFunc;
 
 	void BroadcastMsg(char* p_data, const uint16_t len, uint32_t pass_user_idx, bool except_me);

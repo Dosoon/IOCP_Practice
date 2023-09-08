@@ -1,6 +1,5 @@
 #pragma once
 
-//TODO 에러 코드 중복 사용하지 않도록 한다
 enum class ERROR_CODE : unsigned short
 {
 	kNONE = 0,

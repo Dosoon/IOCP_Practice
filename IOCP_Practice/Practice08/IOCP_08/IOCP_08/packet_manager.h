@@ -17,7 +17,9 @@
 class PacketManager
 {
 public:
-	void Start(const int32_t max_user_cnt, const int32_t redis_thread_cnt);
+	void Start(const int32_t max_user_cnt, const int32_t redis_thread_cnt,
+			   RoomManager* p_ref_room_manager, UserManager* p_ref_user_manager,
+			   RedisManager* p_ref_redis_manager);
 	void Terminate();
 
 	bool EnqueuePacket(int32_t session_index, const char* p_data, DWORD len);
@@ -25,7 +27,11 @@ public:
 	void SetSendPacket(std::function<void(uint32_t, char*, uint16_t)> send_packet);
 
 private:
-	void Init(const int32_t max_user_cnt, const int32_t redis_thread_cnt);
+	void Init(const int32_t max_user_cnt, const int32_t redis_thread_cnt,
+			  RoomManager* p_ref_room_manager, UserManager* p_ref_user_manager,
+			  RedisManager* p_ref_redis_manager);
+	void SetManagers(RoomManager* p_ref_room_manager, UserManager* p_ref_user_manager,
+					 RedisManager* p_ref_redis_manager);
 	void Run();
 	std::function<void(uint32_t, char*, uint16_t)> SendPacketFunc;
 
@@ -58,7 +64,7 @@ private:
 	Concurrency::concurrent_queue<int32_t>		incoming_packet_user_index_queue_;
 	Concurrency::concurrent_queue<PacketInfo>		system_packet_queue_;
 
-	UserManager				user_manager_;
-	RedisManager			redis_manager_;
-	RoomManager				room_manager_;
+	UserManager*				p_ref_user_manager_;
+	RedisManager*				p_ref_redis_manager_;
+	RoomManager*				p_ref_room_manager_;
 };

@@ -20,7 +20,8 @@ bool ChatServer::Start(uint16_t port, int32_t max_session_cnt, int32_t session_b
 		return false;
 	}
 
-	packet_manager_.Start(max_session_cnt, redis_thread_cnt);
+	packet_manager_.Start(max_session_cnt, redis_thread_cnt,
+						  &p_ref_room_manager_, &p_ref_user_manager_, &p_ref_redis_manager_);
 
 	std::cout << "[StartServer] Server Started\n";
 	return true;
@@ -51,6 +52,11 @@ void ChatServer::SetDelegate()
 	packet_manager_.SetSendPacket(std::bind(&Network::SendPacket, &network_,
 								  std::placeholders::_1, std::placeholders::_2,
 								  std::placeholders::_3));
+
+	// 룸 매니저에서 사용될 SendPacket 함수 세팅
+	p_ref_room_manager_.SetSendPacket(std::bind(&Network::SendPacket, &network_,
+											 std::placeholders::_1, std::placeholders::_2,
+											 std::placeholders::_3));
 }
 
 /// <summary>
@@ -58,14 +64,6 @@ void ChatServer::SetDelegate()
 /// </summary>
 void ChatServer::OnConnect(int32_t session_idx)
 {
-	// 세션 데이터 불러오기
-	auto session = network_.GetSessionByIdx(session_idx);
-
-	// 세션 어드레스 불러오기
-	char ip[16];
-	uint16_t port;
-	session->GetSessionIpPort(ip, 16, port);
-
 	// 패킷 매니저에 시스템 패킷 전달
 	PacketInfo pkt { 
 		.session_index_ = static_cast<uint16_t>(session_idx),
@@ -75,9 +73,6 @@ void ChatServer::OnConnect(int32_t session_idx)
 	};
 
 	packet_manager_.EnqueueSystemPacket(pkt);
-
-	// 새로운 접속 로그 출력
-	std::cout << "[OnConnect] ID " << session_idx << " Entered (" << ip << ":" << port << ")\n";
 }
 
 /// <summary>
@@ -85,9 +80,6 @@ void ChatServer::OnConnect(int32_t session_idx)
 /// </summary>
 void ChatServer::OnRecv(int32_t session_idx, const char* p_data, DWORD len)
 {
-	// TODO : 제거
-	std::cout << "[OnRecvMsg] " << std::string_view(p_data, len) << "\n";
-
 	// 패킷 매니저에 전달
 	packet_manager_.EnqueuePacket(session_idx, p_data, len);
 }
@@ -97,14 +89,6 @@ void ChatServer::OnRecv(int32_t session_idx, const char* p_data, DWORD len)
 /// </summary>
 void ChatServer::OnDisconnect(int32_t session_idx)
 {
-	// 세션 데이터 불러오기
-	auto session = network_.GetSessionByIdx(session_idx);
-
-	// 세션 어드레스 불러오기
-	char ip[16];
-	uint16_t port;
-	session->GetSessionIpPort(ip, 16, port);
-
 	// 패킷 매니저에 시스템 패킷 전달
 	PacketInfo pkt{
 		.session_index_ = static_cast<uint16_t>(session_idx),
@@ -114,7 +98,4 @@ void ChatServer::OnDisconnect(int32_t session_idx)
 	};
 
 	packet_manager_.EnqueueSystemPacket(pkt);
-
-	// 새로운 접속 로그 출력
-	std::cout << "[OnDisconnect] ID " << session_idx << " Leaved (" << ip << ":" << port << ")\n";
 }

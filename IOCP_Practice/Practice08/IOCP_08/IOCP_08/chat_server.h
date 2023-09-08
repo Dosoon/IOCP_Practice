@@ -26,4 +26,7 @@ private:
 	bool is_server_running_ = false;
 
 	PacketManager	packet_manager_;
+	RoomManager		p_ref_room_manager_;
+	UserManager		p_ref_user_manager_;
+	RedisManager	p_ref_redis_manager_;
 };

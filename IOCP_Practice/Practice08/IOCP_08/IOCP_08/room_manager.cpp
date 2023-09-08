@@ -19,6 +19,7 @@ void RoomManager::Init(const int32_t begin_room_num, const int32_t max_room_cnt,
 	{
 		room_list_.push_back(new Room());
 		room_list_[i]->Init(i, max_user_cnt);
+		room_list_[i]->SetSendPacket(SendPacketFunc);
 	}
 }
 

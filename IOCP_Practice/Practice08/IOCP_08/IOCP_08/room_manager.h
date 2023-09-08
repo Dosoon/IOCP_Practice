@@ -34,7 +34,6 @@ public:
 	ERROR_CODE LeaveRoom(User* p_user);
 
 private:
-	// TODO : ¿≠¥‹ø°º≠ Bind«ÿ¡‡æﬂ «‘
 	std::function<void(uint32_t, char*, uint16_t)> SendPacketFunc;
 
 	std::vector<Room*> room_list_;

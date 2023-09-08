@@ -22,5 +22,5 @@ int main()
 	}
 
 	std::cout << "[Main] Exit" << std::endl;
-	return 0;
+  	return 0;
 }

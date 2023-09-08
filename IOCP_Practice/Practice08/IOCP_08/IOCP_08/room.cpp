@@ -5,6 +5,7 @@
 #include "packet_id.h"
 
 #include <Windows.h>
+#include <iostream>
 
 void Room::Init(int32_t room_idx, int32_t max_user_cnt)
 {
