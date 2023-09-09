@@ -178,11 +178,9 @@ std::optional<PacketInfo> PacketManager::DequeueSystemPacket()
 
 void PacketManager::ConnectHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
 {
-	std::cout << "Connect Handler\n";
 	auto p_user = p_ref_user_manager_->GetUserByIndex(session_idx);
 
 	if (p_user == nullptr) {
-		std::cout << "[Error] ConnectHandler :: Invalid User Index\n";
 		return;
 	}
 	
@@ -191,11 +189,9 @@ void PacketManager::ConnectHandler(uint32_t session_idx, uint16_t data_size, cha
 
 void PacketManager::DisconnectHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
 {
-	std::cout << "Disonnect Handler\n";
 	auto p_user = p_ref_user_manager_->GetUserByIndex(session_idx);
 
 	if (p_user == nullptr) {
-		std::cout << "[Error] DisconnectHandler :: Invalid User Index\n";
 		return;
 	}
 
@@ -207,8 +203,6 @@ void PacketManager::DisconnectHandler(uint32_t session_idx, uint16_t data_size, 
 
 void PacketManager::LoginHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
 {
-	std::cout << "Login Handler\n";
-
 	auto login_pkt = *reinterpret_cast<LOGIN_REQUEST_PACKET*>(p_data);
 	auto p_user_id = login_pkt.user_id_;
 
@@ -226,6 +220,8 @@ void PacketManager::LoginHandler(uint32_t session_idx, uint16_t data_size, char*
 	// UserID 필드로 접속 여부 확인
 	if (p_ref_user_manager_->FindUserIndexByID(p_user_id) == -1)
 	{
+		p_ref_user_manager_->SetUserID(session_idx, p_user_id);
+
 		// Redis Task 생성 후 Redis 요청 전송
 		RedisLoginReq login_db_task_body;
 		CopyMemory(login_db_task_body.user_id_, login_pkt.user_id_, (kMAX_USER_ID_LEN + 1));
@@ -244,11 +240,10 @@ void PacketManager::LoginHandler(uint32_t session_idx, uint16_t data_size, char*
 
 void PacketManager::LoginDBResHandler(uint32_t session_idx, uint16_t data_size, char* p_data)
 {
-	std::cout << "LoginDBRes Handler\n";
-
 	auto login_db_res_pkt = *reinterpret_cast<RedisLoginRes*>(p_data);
 
 	if (login_db_res_pkt.result_ == static_cast<int16_t>(ERROR_CODE::kNONE)) {
+		p_ref_user_manager_->SetUserID(session_idx, "");
 		p_ref_user_manager_->SetUserLogin(session_idx);
 	}
 

@@ -50,8 +50,7 @@ void UserManager::SetUserLogin(const int32_t user_index)
 	auto user = GetUserByIndex(user_index);
 	AddUser(user->GetUserID(), user_index);
 
-	// TODO : is_confirmed_ 의 정확한 역할 확인 후 재검토
-	//user->SetConfirmed(true);
+	user->SetConfirmed(true);
 }
 
 void UserManager::SetUserID(const int32_t user_index, const std::string& user_id)

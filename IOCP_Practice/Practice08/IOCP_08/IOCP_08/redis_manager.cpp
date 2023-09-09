@@ -78,7 +78,6 @@ void RedisManager::LoginHandler(uint32_t session_idx, uint16_t data_size, char* 
 	if (redis_client_.Get(p_login_pkt->user_id_, &redis_pw) == RC_SUCCESS) {
 
 		if (redis_pw.compare(p_login_pkt->user_pw_) == 0) {
-			p_ref_user_manager_->SetUserID(session_idx, p_login_pkt->user_id_);
 			res_login_pkt.result_ = static_cast<uint16_t>(ERROR_CODE::kNONE);
 		}
 	}
